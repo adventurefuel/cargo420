@@ -389,3 +389,79 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
   .jz-back{top:22px}
   .jz-in{padding-top:30px}
 }
+
+/* ---------- service area (road-plate design) ---------- */
+.sa-hero{padding-block:36px 28px;background:
+  repeating-linear-gradient(90deg,transparent 0 22px,rgba(247,195,27,.08) 22px 44px) center bottom/100% 4px no-repeat,
+  radial-gradient(ellipse at 50% 0%,#1d1b12 0%,var(--ink) 70%)}
+.sa-hero .wrap{display:grid;justify-items:center;gap:22px}
+.sa-plate{position:relative;width:min(640px,100%);background:var(--yellow);color:var(--yellow-ink);border:3px solid #000;border-radius:18px;
+  box-shadow:0 0 0 3px var(--yellow),0 0 0 6px #000,10px 12px 0 6px #000;padding:26px clamp(16px,4vw,36px) 20px;transform:rotate(-1.5deg);display:grid;justify-items:center;gap:14px;text-align:center}
+.sa-stars{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase}
+.sa-plate h1{font-size:clamp(38px,8vw,64px);line-height:.95;color:#000;-webkit-text-stroke:0}
+.sa-form{display:flex;width:100%;max-width:440px;background:#000;border-radius:12px;padding:6px;gap:6px}
+.sa-form input{flex:1;min-width:0;background:#0f0f0d;border:0;border-radius:8px;color:#fff;font-family:var(--f-mono);font-size:clamp(24px,6vw,32px);font-weight:600;letter-spacing:.3em;text-align:center;padding:10px 8px}
+.sa-form input::placeholder{color:#55524a;letter-spacing:.12em;font-size:.6em;font-weight:400}
+.sa-form input:focus{outline:2px solid var(--green);outline-offset:0}
+.sa-form button{background:var(--green);color:#062a04;border:0;border-radius:8px;font-family:var(--f-display);font-size:22px;text-transform:uppercase;padding:0 22px}
+.sa-form button:hover{filter:brightness(1.08)}
+.sa-loc{display:inline-flex;align-items:center;gap:8px;background:none;border:0;color:#000;font-weight:700;font-size:14px;padding:4px}
+.sa-loc svg{width:16px;height:16px}
+.sa-loc:hover span{text-decoration:underline}
+#zip-out[data-v="plate"]{width:min(640px,100%)}
+#zip-out[data-v="plate"]:empty{display:none}
+#zip-out[data-v="plate"] .zc-res{max-width:none}
+
+.sa-ticket{display:grid;grid-template-columns:minmax(0,1fr) auto;background:#fff;color:#111;border-radius:14px;overflow:hidden;animation:tin .3s ease}
+.sa-ticket .t-main{padding:18px 20px;display:grid;gap:2px;align-content:center}
+.sa-ticket small{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6b6b6b}
+.sa-ticket .t-main b{font-family:var(--f-display);font-weight:400;font-size:clamp(30px,6vw,40px);line-height:1;text-transform:uppercase}
+.sa-ticket .t-main span{font-size:14px;color:#444}
+.sa-ticket .t-stub{display:flex;align-items:center;gap:18px;padding:16px 20px;border-left:2px dashed #cfcfcf;background:#f6f6f2}
+.sa-ticket .t-stub div{display:grid}
+.sa-ticket .t-stub b{font-family:var(--f-mono);font-size:22px}
+.sa-ticket .t-stub .btn{text-decoration:none;background:#000;color:var(--yellow);white-space:nowrap}
+.sa-ticket.yes{box-shadow:inset 6px 0 0 var(--green)}
+.sa-ticket.no{grid-template-columns:1fr;box-shadow:inset 6px 0 0 var(--warn)}
+
+.sa-map{padding-block:48px 24px}
+.sa-maphead{max-width:640px;margin-bottom:26px}
+.sa-maphead h2{font-size:clamp(32px,5vw,48px);margin-top:6px}
+.sa-maphead p{color:var(--muted);margin:10px 0 0}
+.sa-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:32px;align-items:start}
+.sa-rings{position:sticky;top:90px}
+.sa-rings svg{width:100%;max-width:420px;height:auto;display:block;margin:0 auto}
+.sa-rings .ring{fill:rgba(247,195,27,var(--o));stroke:rgba(247,195,27,.35);stroke-width:1.5;stroke-dasharray:4 5;transition:stroke .2s,fill .2s}
+.sa-rings .ring.core{fill:var(--yellow);stroke:#000;stroke-dasharray:none}
+.sa-rings .ring.hit{stroke:var(--green);stroke-width:4;stroke-dasharray:none}
+.sa-rings .ring.core.hit{stroke:var(--green)}
+.sa-rings .rlab rect{fill:#000;stroke:rgba(247,195,27,.5)}
+.sa-rings .rlab text{fill:var(--yellow);font-family:var(--f-mono);font-size:12px;font-weight:600}
+.sa-rings .cmin{font-family:var(--f-display);font-size:30px;fill:#000}
+.sa-rings .ccity{font-size:10px;font-weight:700;letter-spacing:.2em;fill:#000}
+.sa-rings .cross{stroke:var(--green);stroke-width:5;stroke-linecap:square}
+.sa-zones{display:grid;gap:12px}
+.sa-zone{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--panel);transition:border-color .2s}
+.sa-zone.hit{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
+.sa-zone header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.sa-zone .sa-n{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.sa-zone header b{font-family:var(--f-display);font-weight:400;font-size:32px;line-height:1;color:var(--yellow)}
+.sa-zone .sa-fee{font-size:13px;color:var(--muted)}
+.sa-chips{display:flex;flex-wrap:wrap;gap:6px}
+.sa-chip{font-size:13px;padding:4px 10px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--text)}
+.sa-chip.hit{background:var(--green);border-color:var(--green);color:#062a04;font-weight:700}
+.sa-rules{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding-block:24px 56px}
+.sa-rules div{border-top:3px solid var(--yellow);padding-top:10px;display:grid;gap:4px}
+.sa-rules b{font-family:var(--f-display);font-weight:400;font-size:26px;text-transform:uppercase;line-height:1}
+.sa-rules span{font-size:14px;color:var(--muted)}
+@media (max-width:900px){.sa-grid{grid-template-columns:1fr}.sa-rings{position:static}.sa-rings svg{max-width:340px}.sa-rules{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){
+  .sa-hero{padding-block:26px 22px}
+  .sa-stars{font-size:9.5px;letter-spacing:.1em;white-space:nowrap}
+  .sa-plate{transform:rotate(-1deg);box-shadow:0 0 0 3px var(--yellow),0 0 0 6px #000,6px 8px 0 6px #000}
+  .sa-ticket{grid-template-columns:1fr}
+  .sa-ticket .t-stub{border-left:0;border-top:2px dashed #cfcfcf;flex-wrap:wrap}
+  .sa-ticket .t-stub .btn{flex:1 0 100%;text-align:center}
+  .sa-rules{grid-template-columns:1fr 1fr;gap:16px 12px}
+}
+@media (prefers-reduced-motion:reduce){.sa-plate{transform:none}}
