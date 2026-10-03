@@ -1,14 +1,4 @@
 /* Cargo+420 storefront */
-const ICONS={
- flower:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M24 42V24M24 24c0-9 0-14 0-20 4 6 5 13 0 20zM24 24c-5-6-11-9-18-9 3 7 10 10 18 9zM24 24c5-6 11-9 18-9-3 7-10 10-18 9zM24 26c-4 2-9 3-14 2 3 4 9 5 14-2zM24 26c4 2 9 3 14 2-3 4-9 5-14-2z"/></svg>',
- edibles:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><rect x="7" y="16" width="34" height="22" rx="4"/><path d="M7 24h34M18 16v22M30 16v22"/><path d="M15 10c2-3 6-3 8 0M27 10c2-3 6-3 8 0"/></svg>',
- cbd:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><rect x="15" y="18" width="18" height="24" rx="3"/><path d="M19 18v-5h10v5M22 13V6h4v7"/><path d="M20 30h8"/></svg>',
- concentrates:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><ellipse cx="24" cy="34" rx="16" ry="6"/><path d="M8 34V26c0-3 7-6 16-6s16 3 16 6v8"/><path d="M18 16c0-4 6-6 6-10 0 4 6 6 6 10a6 6 0 0 1-12 0z"/></svg>',
- mushrooms:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M6 24C6 14 14 7 24 7s18 7 18 17z"/><path d="M18 24v12a6 6 0 0 0 12 0V24"/><circle cx="16" cy="16" r="2"/><circle cx="29" cy="13" r="2"/></svg>',
- vapes:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><rect x="19" y="14" width="10" height="30" rx="3"/><path d="M21 14V6h6v8M19 26h10"/></svg>',
- enhance:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M24 40S7 30 7 18a8 8 0 0 1 17-4 8 8 0 0 1 17 4c0 12-17 22-17 22z"/></svg>',
- all:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6"><rect x="7" y="7" width="14" height="14"/><rect x="27" y="7" width="14" height="14"/><rect x="7" y="27" width="14" height="14"/><rect x="27" y="27" width="14" height="14"/></svg>'
-};
 const HOME_CATS=['flower','edibles','cbd','concentrates','mushrooms','vapes','enhance'];
 const D={products:[],zones:[],settings:{},tiers:[],events:[]};
 const prod=id=>D.products.find(p=>p.id===id);
