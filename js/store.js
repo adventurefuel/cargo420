@@ -61,9 +61,48 @@ function vHome(V){
   </div></div>`;
 }
 function vAreas(V){
-  V.innerHTML=`<div class="wrap page"><div class="jz">${zipChecker('light')}</div><h1 style="margin-top:40px">Service area</h1>
-  <p class="lede">We don't deliver orders under $${Number(D.settings.base_min)}. If your order is under your city's minimum, a delivery fee applies. Missed deliveries carry a re-delivery fee of ${esc(D.settings.redeliver)}.</p>
-  <div class="zones">${D.zones.map(z=>`<div class="zone"><div class="min">$${Number(z.min_order)}<small>minimum${Number(z.fee)?` · $${Number(z.fee)} fee if under`:''}</small></div><p>${esc(z.cities.join(', '))}</p></div>`).join('')}</div></div>`;
+  const base=Number(D.settings.base_min);
+  V.innerHTML=`<div class="sa">
+  <section class="sa-hero"><div class="wrap">
+   <div class="sa-plate">
+    <span class="sa-stars">★ ★ ★ &nbsp;Exclusive delivery service&nbsp; ★ ★ ★</span>
+    <h1>Do we pull up<br>to your door?</h1>
+    <form class="sa-form" id="zipf" novalidate role="search"><label for="zip-in" class="sr">Your ZIP code</label>
+     <input id="zip-in" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="ZIP code" value="${esc(myZip?.zip||'')}">
+     <button>Check</button></form>
+    <button type="button" class="sa-loc" id="zip-loc">${ICONS.plane}<span>Use my current location</span></button>
+   </div>
+   <div id="zip-out" data-v="plate" aria-live="polite">${myZip?zipResult(myZip.zip,'plate'):''}</div>
+  </div></section>
+
+  <section class="wrap sa-map">
+   <div class="sa-maphead"><span class="eyebrow">Delivery zones</span><h2>The farther the drive,<br>the bigger the minimum.</h2>
+    <p>Every order needs at least $${base}. Under your city's minimum? You can still order with a delivery fee.</p></div>
+   <div class="sa-grid">
+    <div class="sa-rings">${ringsSvg()}</div>
+    <div class="sa-zones">${D.zones.map((z,i)=>`<article class="sa-zone" data-zone="${z.id}">
+      <header><span class="sa-n">Zone ${i+1}</span><b>$${Number(z.min_order)}</b><span class="sa-fee">${Number(z.fee)?`minimum · $${Number(z.fee)} fee if under`:'minimum · no fee'}</span></header>
+      <div class="sa-chips">${z.cities.map(c=>`<span class="sa-chip${myZip?.city===c?' hit':''}" data-city="${esc(c)}">${esc(c)}</span>`).join('')}</div></article>`).join('')}</div>
+   </div>
+  </section>
+
+  <section class="wrap sa-rules">
+   <div><b>$${base}</b><span>Minimum on every order, every city.</span></div>
+   <div><b>Cash</b><span>Pay your driver at the door. Exact change helps.</span></div>
+   <div><b>21+ ID</b><span>Meet your driver at their vehicle with a valid ID.</span></div>
+   <div><b>Missed it?</b><span>Re-delivery fee of ${esc(D.settings.redeliver)}.</span></div>
+  </section></div>`;
+}
+function ringsSvg(){
+  const n=D.zones.length,R=188,r0=48,step=n>1?(R-r0)/(n-1):0,hitZ=myZip&&zoneForCity(myZip.city);
+  let g='';
+  for(let i=n-1;i>=0;i--){const z=D.zones[i],r=r0+i*step,hit=hitZ&&hitZ.id===z.id;
+    g+=`<circle cx="200" cy="200" r="${r}" class="ring${i===0?' core':''}${hit?' hit':''}" data-zone="${z.id}" style="--o:${(0.05+0.05*(n-1-i)).toFixed(2)}"/>`;
+    if(i>0)g+=`<g class="rlab${hit?' hit':''}"><rect x="${200-26}" y="${200-r+6}" width="52" height="22" rx="11"/><text x="200" y="${200-r+21.5}" text-anchor="middle">$${Number(z.min_order)}</text></g>`;}
+  const z0=D.zones[0];
+  return `<svg viewBox="0 0 400 400" role="img" aria-label="Delivery zones radiating out from Detroit, minimum order rising with distance">${g}
+   <text x="200" y="196" text-anchor="middle" class="cmin">$${z0?Number(z0.min_order):''}</text><text x="200" y="216" text-anchor="middle" class="ccity">DETROIT</text>
+   <path d="M200 228v14M193 235h14" class="cross"/></svg>`;
 }
 
 /* ---------- ZIP checker ---------- */
@@ -93,8 +132,14 @@ function zipChecker(variant){
    <button type="button" class="zc-loc" id="zip-loc">${ICONS.plane}<span>Use my current location</span></button>
    ${out}</div>`;
 }
-function zipResult(zip){
+function zipResult(zip,v){
   const city=D.zips[zip];const z=city&&zoneForCity(city);
+  if(v==='plate'){
+    if(!z)return`<div class="sa-ticket no"><div class="t-main"><small>Out of range</small><b>${esc(zip)}</b><span>We don't deliver here yet. See the zones below for where we go.</span></div></div>`;
+    const m=Number(z.min_order),f=Number(z.fee),i=D.zones.indexOf(z)+1;
+    return`<div class="sa-ticket yes"><div class="t-main"><small>We deliver to</small><b>${esc(city)}</b><span>${esc(zip)} · Zone ${i}</span></div>
+     <div class="t-stub"><div><small>Minimum</small><b>$${m}</b></div><div><small>Fee if under</small><b>${f?'$'+f:'None'}</b></div><a class="btn" href="#shop">Start shopping →</a></div></div>`;
+  }
   if(!z)return`<div class="zc-res no"><b>We don't deliver to ${esc(zip)} yet.</b><span>We're growing. Check the city list below, or follow us for new areas.</span></div>`;
   const m=Number(z.min_order),f=Number(z.fee),base=Number(D.settings.base_min);
   return`<div class="zc-res yes"><b>Yes! We deliver to ${esc(city)} (${esc(zip)}).</b>
@@ -106,7 +151,10 @@ function checkZip(zip){
   if(zip.length!==5){out.innerHTML='<div class="zc-res no"><b>Enter a 5-digit ZIP code.</b></div>';return}
   const city=D.zips[zip];
   if(city){myZip={zip,city};store.set('c420zip',myZip);co.city=city;store.set('c420co',{...co,age:undefined})}
-  out.innerHTML=zipResult(zip);
+  out.innerHTML=zipResult(zip,out.dataset.v);
+  document.querySelectorAll('.sa-chip').forEach(c=>c.classList.toggle('hit',c.dataset.city===city));
+  const hz=city&&zoneForCity(city);document.querySelectorAll('.sa-rings .ring,.sa-zone').forEach(c=>c.classList.toggle('hit',!!hz&&+c.dataset.zone===hz.id));
+  document.querySelectorAll('.sa-rings .rlab').forEach(l=>l.classList.remove('hit'));
   const chip=$('#zipchip');if(chip&&city)chip.innerHTML=`${ICONS.pin}<span>Delivering to <b>${esc(city)} ${esc(zip)}</b></span><u>Change</u>`;
 }
 function useLocation(){
