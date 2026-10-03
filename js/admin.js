@@ -1,5 +1,5 @@
 /* Cargo+420 owner dashboard (installable PWA) */
-const A={orders:[],customers:[],drivers:[],members:[],products:[],zones:[],settings:{},tiers:[],events:[]};
+const A={orders:[],customers:[],drivers:[],members:[],products:[],zones:[],settings:{},tiers:[],events:[],zips:[]};
 const SL={new:'New',confirmed:'Confirmed',out:'Out for delivery',delivered:'Delivered',cancelled:'Cancelled'};
 const isToday=ts=>new Date(ts).toDateString()===new Date().toDateString();
 const ago=ts=>{const m=Math.round((Date.now()-new Date(ts))/60000);if(m<1)return'just now';if(m<60)return m+'m ago';const h=Math.floor(m/60);if(h<24)return h+'h '+(m%60)+'m ago';return Math.floor(h/24)+'d ago'};
@@ -98,9 +98,10 @@ async function reloadData(){
     sb.from('zones').select('*').order('sort'),
     sb.from('store_settings').select('*').eq('id',1).single(),
     sb.from('tiers').select('*').order('sort'),
-    sb.from('events').select('*').order('starts_on')]);
+    sb.from('events').select('*').order('starts_on'),
+    sb.from('zip_codes').select('*').order('zip')]);
   const bad=res.find(x=>x.error);if(bad)throw bad.error;
-  [A.orders,A.customers,A.drivers,A.members,A.products,A.zones,A.settings,A.tiers,A.events]=res.map(x=>x.data);
+  [A.orders,A.customers,A.drivers,A.members,A.products,A.zones,A.settings,A.tiers,A.events,A.zips]=res.map(x=>x.data);
   render();
 }
 function subscribe(){
@@ -308,6 +309,8 @@ function aSettings(B){
    <label>Re-delivery fee wording<input id="s-redel" value="${esc(A.settings.redeliver)}"></label>
    <h2 style="font-size:26px;margin-top:10px">Delivery zones</h2><p class="note" style="margin:0">If an order is under the zone minimum, the fee is added. Cities are comma separated and show in the checkout city list.</p>
    ${A.zones.map(z=>`<div class="pform"><div class="two"><label>Zone minimum ($)<input type="number" min="0" data-zmin="${z.id}" value="${Number(z.min_order)}"></label><label>Fee if under minimum ($)<input type="number" min="0" data-zfee="${z.id}" value="${Number(z.fee)}"></label></div><label>Cities<textarea rows="2" data-zcities="${z.id}">${esc(z.cities.join(', '))}</textarea></label></div>`).join('')}
+   <h2 style="font-size:26px;margin-top:10px">ZIP codes</h2><p class="note" style="margin:0">Powers the “Do we deliver to you?” checker. One per line: ZIP, then the city exactly as it's written in a zone above.</p>
+   <label class="sr" for="s-zips">ZIP codes</label><textarea id="s-zips" rows="8" class="mono" style="font-size:13px">${esc(A.zips.map(z=>z.zip+' '+z.city).join('\n'))}</textarea>
    <h2 style="font-size:26px;margin-top:10px">Membership tiers</h2>
    ${A.tiers.map(t=>`<div class="pform"><b>${esc(t.name)}</b><div class="two"><label>Monthly dues ($)<input type="number" min="0" data-tprice="${t.id}" value="${Number(t.price)}"></label><label>Discount (%)<input type="number" min="0" max="90" data-tpct="${t.id}" value="${t.pct_off}"></label></div><label class="toggle"><input type="checkbox" data-twaive="${t.id}" ${t.waive_fee?'checked':''}> Waive the under-minimum delivery fee</label><label>Perks (one per line)<textarea rows="3" data-tperks="${t.id}">${esc(t.perks.join('\n'))}</textarea></label></div>`).join('')}
    <button class="btn" style="justify-self:start">Save settings</button></form>`;
@@ -316,6 +319,14 @@ async function saveSettings(){
   try{
     let r=await sb.from('store_settings').update({hours:$('#s-hours').value.trim(),redeliver:$('#s-redel').value.trim(),base_min:Math.max(0,+$('#s-base').value||0),updated_at:new Date().toISOString()}).eq('id',1);if(r.error)throw r.error;
     for(const z of A.zones){r=await sb.from('zones').update({min_order:+$(`[data-zmin="${z.id}"]`).value||0,fee:+$(`[data-zfee="${z.id}"]`).value||0,cities:$(`[data-zcities="${z.id}"]`).value.split(',').map(s=>s.trim()).filter(Boolean)}).eq('id',z.id);if(r.error)throw r.error}
+    const cities=new Set(A.zones.flatMap(z=>$(`[data-zcities="${z.id}"]`).value.split(',').map(s=>s.trim()).filter(Boolean)));
+    const want=new Map();const badZ=[];
+    $('#s-zips').value.split('\n').map(l=>l.trim()).filter(Boolean).forEach(l=>{const m=l.match(/^(\d{5})\s+(.+)$/);if(!m||!cities.has(m[2].trim()))badZ.push(l);else want.set(m[1],m[2].trim())});
+    if(badZ.length)throw new Error('Fix these ZIP lines (use a 5-digit ZIP and a city from a zone): '+badZ.slice(0,3).join(' | '));
+    const gone=A.zips.filter(z=>!want.has(z.zip)).map(z=>z.zip);
+    if(gone.length){r=await sb.from('zip_codes').delete().in('zip',gone);if(r.error)throw r.error}
+    const up=[...want].filter(([zip,city])=>!A.zips.some(z=>z.zip===zip&&z.city===city)).map(([zip,city])=>({zip,city}));
+    if(up.length){r=await sb.from('zip_codes').upsert(up,{onConflict:'zip'});if(r.error)throw r.error}
     for(const t of A.tiers){r=await sb.from('tiers').update({price:+$(`[data-tprice="${t.id}"]`).value||0,pct_off:Math.min(90,Math.max(0,parseInt($(`[data-tpct="${t.id}"]`).value)||0)),waive_fee:$(`[data-twaive="${t.id}"]`).checked,perks:$(`[data-tperks="${t.id}"]`).value.split('\n').map(s=>s.trim()).filter(Boolean)}).eq('id',t.id);if(r.error)throw r.error}
     toast('Settings saved','The store uses them right away.',true);await reloadData();
   }catch(e){toast('Settings not saved',errMsg(e))}

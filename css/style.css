@@ -268,3 +268,30 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .thumb{width:44px;height:44px;background:var(--tile);display:grid;place-items:center;overflow:hidden;border-radius:4px}
 .thumb svg{width:90%;height:90%}.thumb img{width:100%;height:100%;object-fit:cover}
 @media (max-width:520px){.pform .three{grid-template-columns:1fr 1fr}}
+/* ZIP checker */
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.zipchip{display:inline-flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:14px;color:var(--text)}
+.zipchip svg{width:18px;height:18px;color:var(--green)}
+.zipchip u{color:var(--yellow);text-underline-offset:3px}
+.zipchip:hover{border-color:var(--yellow)}
+.zipcard{max-width:640px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:28px 20px}
+.zc{display:grid;justify-items:center;text-align:center;gap:12px}
+.zc-icon svg{width:64px;height:64px;color:var(--text)}
+.zc h2{font-size:clamp(30px,5vw,40px)}
+.zc-sub{margin:0;color:var(--muted);max-width:42ch}
+.zc-form{display:flex;width:100%;max-width:520px;margin-top:6px;border:1px solid var(--line);border-radius:999px;background:var(--panel2);overflow:hidden}
+.zc-form:focus-within{border-color:var(--yellow)}
+.zc-form input{border:0;background:transparent;border-radius:0;padding:14px 22px;font-size:17px;letter-spacing:.04em;font-family:var(--f-mono)}
+.zc-form input:focus{outline:none}
+.zc-form button{border:0;background:var(--yellow);color:var(--yellow-ink);padding:0 20px;display:grid;place-items:center}
+.zc-form button svg{width:22px;height:22px}
+.zc-loc{display:inline-flex;align-items:center;gap:8px;background:none;border:0;font-size:15px;padding:6px}
+.zc-loc svg{width:20px;height:20px;color:var(--yellow)}
+.zc-loc:hover span{text-decoration:underline}
+.zc-res{width:100%;max-width:520px;display:grid;gap:6px;justify-items:center;border-radius:12px;padding:14px;border:1px solid var(--line);text-align:center}
+.zc-res b{font-size:16px}.zc-res span{color:var(--muted);font-size:14px}
+.zc-res.yes{border-color:var(--green)}.zc-res.yes b{color:var(--green)}
+.zc-res.no{border-color:var(--warn)}.zc-res.no b{color:var(--warn)}
+.zc-res .btn{margin-top:4px;text-decoration:none}
+.zipbox{grid-template-columns:1fr!important;max-width:620px;padding:36px 20px 28px;position:relative}
+.zc-close{position:absolute;top:10px;right:14px}

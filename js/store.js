@@ -1,6 +1,6 @@
 /* Cargo+420 storefront */
 const HOME_CATS=['flower','edibles','cbd','concentrates','mushrooms','vapes','enhance'];
-const D={products:[],zones:[],settings:{},tiers:[],events:[]};
+const D={products:[],zones:[],settings:{},tiers:[],events:[],zips:{}};
 const prod=id=>D.products.find(p=>p.id===id);
 const allCities=()=>D.zones.flatMap(z=>z.cities).sort((a,b)=>a.localeCompare(b));
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
@@ -8,14 +8,16 @@ let cart=store.get('c420cart',[]);
 function saveCart(){cart=cart.filter(x=>prod(x.id)&&x.qty>0);store.set('c420cart',cart);$('#cartn').textContent=cart.reduce((s,x)=>s+x.qty,0)}
 
 async function loadAll(){
-  const [p,z,s,t,e]=await Promise.all([
+  const [p,z,s,t,e,zz]=await Promise.all([
     sb.from('products').select('*').eq('active',true).order('created_at',{ascending:false}),
     sb.from('zones').select('*').order('sort'),
     sb.from('store_settings').select('*').eq('id',1).single(),
     sb.from('tiers').select('*').order('sort'),
-    sb.from('events').select('*').gte('starts_on',new Date(Date.now()-864e5).toISOString().slice(0,10)).order('starts_on')]);
+    sb.from('events').select('*').gte('starts_on',new Date(Date.now()-864e5).toISOString().slice(0,10)).order('starts_on'),
+    sb.from('zip_codes').select('zip,city')]);
   const err=[p,z,s,t,e].find(x=>x.error);if(err)throw err.error;
   D.products=p.data;D.zones=z.data;D.settings=s.data;D.tiers=t.data;D.events=e.data;
+  D.zips={};(zz.data||[]).forEach(r=>D.zips[r.zip]=r.city);
 }
 
 /* ---------- routing ---------- */
@@ -39,7 +41,8 @@ function render(){
 /* ---------- home ---------- */
 function vHome(V){
   V.innerHTML=`<div class="wrap">
-  <section class="hero"><img src="img/logo.webp" alt="Cargo+420 Exclusive Delivery Service"><p>Metro Detroit cannabis delivery. Pick a category, build your order, pay cash at the door.</p></section>
+  <section class="hero"><img src="img/logo.webp" alt="Cargo+420 Exclusive Delivery Service"><p>Metro Detroit cannabis delivery. Pick a category, build your order, pay cash at the door.</p>
+   <button class="zipchip" id="zipchip">${myZip?`${ICONS.pin}<span>Delivering to <b>${esc(myZip.city)} ${esc(myZip.zip)}</b></span><u>Change</u>`:`${ICONS.pin}<span>Do we deliver to you?</span><u>Check your ZIP</u>`}</button></section>
   <nav class="catgrid" aria-label="Shop by category">
    ${HOME_CATS.map(id=>{const c=CATS.find(x=>x.id===id);return`<a class="catbtn" href="#${id}">${ICONS[id]}<span>${c.name}</span><small>${c.blurb}</small></a>`}).join('')}
    <a class="catbtn all" href="#shop">${ICONS.all}<span>Shop all</span><small>${D.products.length} products</small></a>
@@ -58,9 +61,58 @@ function vHome(V){
   </div></div>`;
 }
 function vAreas(V){
-  V.innerHTML=`<div class="wrap page"><h1>Service area</h1>
+  V.innerHTML=`<div class="wrap page"><div class="zipcard">${zipChecker()}</div><h1 style="margin-top:36px">Service area</h1>
   <p class="lede">We don't deliver orders under $${Number(D.settings.base_min)}. If your order is under your city's minimum, a delivery fee applies. Missed deliveries carry a re-delivery fee of ${esc(D.settings.redeliver)}.</p>
   <div class="zones">${D.zones.map(z=>`<div class="zone"><div class="min">$${Number(z.min_order)}<small>minimum${Number(z.fee)?` · $${Number(z.fee)} fee if under`:''}</small></div><p>${esc(z.cities.join(', '))}</p></div>`).join('')}</div></div>`;
+}
+
+/* ---------- ZIP checker ---------- */
+let myZip=store.get('c420zip',null);
+const zoneForCity=city=>D.zones.filter(z=>z.cities.includes(city)).sort((a,b)=>a.min_order-b.min_order)[0]||null;
+function zipChecker(){
+  return `<div class="zc">
+   <div class="zc-icon">${ICONS.route}</div>
+   <h2>Your order, your door</h2>
+   <p class="zc-sub">Discreet home delivery across Metro Detroit. Enter your ZIP code to see if we deliver to you and what your minimum is.</p>
+   <form class="zc-form" id="zipf" novalidate role="search"><label for="zip-in" class="sr">ZIP code</label>
+    <input id="zip-in" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="Enter your ZIP code" value="${esc(myZip?.zip||'')}">
+    <button aria-label="Check ZIP code">${ICONS.search}</button></form>
+   <button type="button" class="zc-loc" id="zip-loc">${ICONS.plane}<span>Use my current location</span></button>
+   <div id="zip-out" aria-live="polite">${myZip?zipResult(myZip.zip):''}</div></div>`;
+}
+function zipResult(zip){
+  const city=D.zips[zip];const z=city&&zoneForCity(city);
+  if(!z)return`<div class="zc-res no"><b>We don't deliver to ${esc(zip)} yet.</b><span>We're growing. Check the city list below, or follow us for new areas.</span></div>`;
+  const m=Number(z.min_order),f=Number(z.fee),base=Number(D.settings.base_min);
+  return`<div class="zc-res yes"><b>Yes! We deliver to ${esc(city)} (${esc(zip)}).</b>
+   <span>${m>base&&f?`Orders of $${m}+ deliver free. Under $${m}, a $${f} delivery fee applies (minimum order $${base}).`:`Minimum order $${m}. No delivery fee.`}</span>
+   <a class="btn" href="#shop">Start shopping</a></div>`;
+}
+function checkZip(zip){
+  zip=String(zip||'').replace(/\D/g,'').slice(0,5);const out=$('#zip-out');
+  if(zip.length!==5){out.innerHTML='<div class="zc-res no"><b>Enter a 5-digit ZIP code.</b></div>';return}
+  const city=D.zips[zip];
+  if(city){myZip={zip,city};store.set('c420zip',myZip);co.city=city;store.set('c420co',{...co,age:undefined})}
+  out.innerHTML=zipResult(zip);
+  const chip=$('#zipchip');if(chip&&city)chip.innerHTML=`${ICONS.pin}<span>Delivering to <b>${esc(city)} ${esc(zip)}</b></span><u>Change</u>`;
+}
+function useLocation(){
+  const out=$('#zip-out');
+  if(!navigator.geolocation){out.innerHTML='<div class="zc-res no"><b>Your browser can\'t share location.</b><span>Type your ZIP code instead.</span></div>';return}
+  out.innerHTML='<div class="zc-res"><span>Finding your location…</span></div>';
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    try{
+      const {latitude:la,longitude:lo}=pos.coords;
+      const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${la}&longitude=${lo}&localityLanguage=en`);
+      const j=await r.json();const zip=(j.postcode||'').slice(0,5);
+      if(!zip)throw new Error('no zip');
+      $('#zip-in').value=zip;checkZip(zip);
+    }catch(e){out.innerHTML='<div class="zc-res no"><b>We couldn\'t find your ZIP code.</b><span>Type it in instead.</span></div>'}
+  },()=>{out.innerHTML='<div class="zc-res no"><b>Location is turned off for this site.</b><span>Type your ZIP code instead.</span></div>'},{timeout:10000,maximumAge:600000});
+}
+function openZipModal(){
+  $('#layer').innerHTML=`<div class="scrim" data-close></div><div class="modal"><div class="box zipbox" role="dialog" aria-label="Check your ZIP code"><button class="x zc-close" data-close aria-label="Close">×</button>${zipChecker()}</div></div>`;
+  setTimeout(()=>$('#zip-in')?.focus(),50);
 }
 
 /* ---------- shop ---------- */
@@ -117,7 +169,7 @@ function openCart(){
 }
 
 /* ---------- checkout ---------- */
-let co=store.get('c420co',{name:'',phone:'',address:'',city:'',notes:''});co.age=false;
+let co=store.get('c420co',{name:'',phone:'',address:'',city:'',notes:''});co.age=false;if(!co.city&&store.get('c420zip',null))co.city=store.get('c420zip',null).city;
 let quote=null,placing=false;
 async function refreshQuote(){
   const {data,error}=await sb.rpc('quote_order',{p_items:cart,p_city:co.city||null,p_phone:co.phone||null});
@@ -228,6 +280,9 @@ document.addEventListener('click',e=>{
   if(t.dataset.go){$('#layer').innerHTML='';location.hash='#'+t.dataset.go;return}
   if(t.dataset.tier){$('#m-tier').value=t.dataset.tier;$('#memf').scrollIntoView({behavior:'smooth'});$('#m-name').focus({preventScroll:true});return}
   if(t.dataset.rsvp){rsvp(t.dataset.rsvp);return}
+  if(t.id==='zipchip'){openZipModal();return}
+  if(t.id==='zip-loc'){useLocation();return}
+  if(t.closest('.zc-res')&&t.matches('a[href="#shop"]')){$('#layer').innerHTML=''}
 });
 let qT;
 document.addEventListener('change',e=>{
@@ -238,7 +293,7 @@ document.addEventListener('change',e=>{
 document.addEventListener('input',e=>{
   if(e.target.id==='shopq'){clearTimeout(qT);qT=setTimeout(()=>{q=e.target.value;vShop($('#view'));const i=$('#shopq');i.focus();i.setSelectionRange(q.length,q.length)},250)}
 });
-document.addEventListener('submit',e=>{e.preventDefault();if(e.target.id==='cof')placeOrder();if(e.target.id==='memf')applyMember(e.target)});
+document.addEventListener('submit',e=>{e.preventDefault();if(e.target.id==='cof')placeOrder();if(e.target.id==='memf')applyMember(e.target);if(e.target.id==='zipf')checkZip($('#zip-in').value)});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#layer').innerHTML=''});
 
 /* ---------- age gate + boot ---------- */

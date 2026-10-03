@@ -26,6 +26,10 @@ const ICONS={
  vapes:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><rect x="19" y="14" width="10" height="30" rx="3"/><path d="M21 14V6h6v8M19 26h10"/></svg>',
  enhance:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M24 40S7 30 7 18a8 8 0 0 1 17-4 8 8 0 0 1 17 4c0 12-17 22-17 22z"/></svg>',
  smoke:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M6 32l30-14 4 8-30 14z"/><path d="M40 18c2-4 0-8-3-10M44 16c2-5-1-10-4-12"/></svg>',
+ pin:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>',
+ search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
+ plane:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.5 11.2 21 3l-8.2 18.5-2.4-7.9z"/></svg>',
+ route:'<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><rect x="16" y="6" width="32" height="52" rx="5"/><path d="M26 50h12"/><path d="M24 20c6 0 4 8 10 8s6-8 10-8" stroke-dasharray="3 4"/><path d="M44 12a5 5 0 0 0-5 5c0 4 5 9 5 9s5-5 5-9a5 5 0 0 0-5-5z" fill="#41d63a" stroke="#000"/><rect x="22" y="34" width="20" height="9" rx="2" fill="#f7c31b" stroke="#000"/></svg>',
  all:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6"><rect x="7" y="7" width="14" height="14"/><rect x="27" y="7" width="14" height="14"/><rect x="7" y="27" width="14" height="14"/><rect x="27" y="27" width="14" height="14"/></svg>'
 };
 const catName=id=>(CATS.find(c=>c.id===id)||{name:id}).name;
