@@ -28,7 +28,7 @@ function go(){
   if(CATS.some(c=>c.id===h)){route='shop';shopFilter={type:'cat',val:h}}
   render();window.scrollTo(0,0);
 }
-window.addEventListener('hashchange',go);
+window.addEventListener('hashchange',()=>{$('#nav').classList.remove('open');$('#menubtn')?.setAttribute('aria-expanded','false');go()});
 function render(){
   document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.r===route));
   const b=$('#banner');
@@ -61,7 +61,7 @@ function vHome(V){
   </div></div>`;
 }
 function vAreas(V){
-  V.innerHTML=`<div class="wrap page"><div class="zipcard">${zipChecker()}</div><h1 style="margin-top:36px">Service area</h1>
+  V.innerHTML=`<div class="wrap page"><div class="jz">${zipChecker('light')}</div><h1 style="margin-top:40px">Service area</h1>
   <p class="lede">We don't deliver orders under $${Number(D.settings.base_min)}. If your order is under your city's minimum, a delivery fee applies. Missed deliveries carry a re-delivery fee of ${esc(D.settings.redeliver)}.</p>
   <div class="zones">${D.zones.map(z=>`<div class="zone"><div class="min">$${Number(z.min_order)}<small>minimum${Number(z.fee)?` · $${Number(z.fee)} fee if under`:''}</small></div><p>${esc(z.cities.join(', '))}</p></div>`).join('')}</div></div>`;
 }
@@ -69,16 +69,29 @@ function vAreas(V){
 /* ---------- ZIP checker ---------- */
 let myZip=store.get('c420zip',null);
 const zoneForCity=city=>D.zones.filter(z=>z.cities.includes(city)).sort((a,b)=>a.min_order-b.min_order)[0]||null;
-function zipChecker(){
+function zipChecker(variant){
+  const val=esc(myZip?.zip||''),out=`<div id="zip-out" aria-live="polite">${myZip?zipResult(myZip.zip):''}</div>`;
+  if(variant==='light')return `<div class="jz-in">
+   <a class="jz-back" href="#home" aria-label="Back to home">${ICONS.back}</a>
+   <div class="jz-ill">${ICONS.route}</div>
+   <h2 class="jz-title">Your Delivery, Your Way</h2>
+   <p class="jz-sub">Discreet home delivery across Metro Detroit.<br>Cash at the door, 21+ with ID.</p>
+   <div class="jz-toggle" role="tablist" aria-label="Order type"><button type="button" role="tab" aria-selected="false" id="jz-pickup">Pickup</button><button type="button" role="tab" aria-selected="true" class="on">Delivery</button></div>
+   <div class="jz-row"><span class="jz-pin">${ICONS.pin}</span><div><b>Add an address for delivery</b><small>Please enter your ZIP code &amp; enjoy delivery</small></div></div>
+   <form class="jz-form" id="zipf" novalidate role="search"><label for="zip-in" class="sr">ZIP code</label>
+    <input id="zip-in" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="Search ZIP code" value="${val}">
+    <button aria-label="Check ZIP code">${ICONS.search}</button></form>
+   <button type="button" class="jz-loc" id="zip-loc">${ICONS.plane}<span>Use My Current Location</span></button>
+   ${out}</div>`;
   return `<div class="zc">
    <div class="zc-icon">${ICONS.route}</div>
    <h2>Your order, your door</h2>
    <p class="zc-sub">Discreet home delivery across Metro Detroit. Enter your ZIP code to see if we deliver to you and what your minimum is.</p>
    <form class="zc-form" id="zipf" novalidate role="search"><label for="zip-in" class="sr">ZIP code</label>
-    <input id="zip-in" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="Enter your ZIP code" value="${esc(myZip?.zip||'')}">
+    <input id="zip-in" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="Enter your ZIP code" value="${val}">
     <button aria-label="Check ZIP code">${ICONS.search}</button></form>
    <button type="button" class="zc-loc" id="zip-loc">${ICONS.plane}<span>Use my current location</span></button>
-   <div id="zip-out" aria-live="polite">${myZip?zipResult(myZip.zip):''}</div></div>`;
+   ${out}</div>`;
 }
 function zipResult(zip){
   const city=D.zips[zip];const z=city&&zoneForCity(city);
@@ -116,6 +129,20 @@ function openZipModal(){
 }
 
 /* ---------- shop ---------- */
+function filterLabel(){return shopFilter.type==='cat'?catName(shopFilter.val):shopFilter.type==='feat'?'Most liked':shopFilter.val||''}
+function openFilters(){
+  const on=(t,v)=>shopFilter.type===t&&(v==null||shopFilter.val===v)?'on':'';
+  $('#layer').innerHTML=`<div class="scrim" data-close></div><aside class="drawer fsheet" role="dialog" aria-label="Filter and sort"><header><h2 style="font-size:30px">Filter &amp; Sort</h2><button class="x" data-close aria-label="Close">×</button></header>
+   <div class="body">
+    <label>Search<input id="shopq2" type="search" placeholder="Search menu" value="${esc(q)}"></label>
+    <label>Sort by<select id="sort2"><option value="newest">Newest</option><option value="low">Price, low to high</option><option value="high">Price, high to low</option><option value="name">Name A–Z</option></select></label>
+    <div class="eyebrow" style="margin-top:6px">Category</div>
+    <div class="fchips"><button class="${on('all')}" data-f="all">All</button><button class="${on('feat')}" data-f="feat">Most liked</button>${CATS.map(c=>`<button class="${on('cat',c.id)}" data-f="cat" data-v="${c.id}">${c.name}</button>`).join('')}</div>
+    <div class="eyebrow" style="margin-top:6px">Filter</div>
+    <div class="fchips">${tagsFor().map(t=>`<button class="${on('tag',t)}" data-f="tag" data-v="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+   </div><button class="btn" data-close style="margin-top:12px">Show results</button></aside>`;
+  $('#sort2').value=sortBy;
+}
 function tagsFor(){const s=new Set();D.products.forEach(p=>p.tags.forEach(t=>s.add(t)));return[...s].sort()}
 function vShop(V){
   let list=D.products.slice();
@@ -136,11 +163,12 @@ function vShop(V){
     ${tagsFor().map(t=>`<li><button class="${on('tag',t)}" data-f="tag" data-v="${esc(t)}">${esc(t)}</button></li>`).join('')}
    </ul></aside>
    <section>
-    <div class="mobile-cats"><button class="${on('all')}" data-f="all">All</button>${CATS.map(c=>`<button class="${on('cat',c.id)}" data-f="cat" data-v="${c.id}">${c.name}</button>`).join('')}</div>
-    <div class="shophead"><span class="count">${list.length} products</span>
-     <div class="row"><input id="shopq" type="search" placeholder="Search menu" value="${esc(q)}" aria-label="Search menu">
+    <div class="shophead"><span class="count">${list.length} products${shopFilter.type!=='all'?` · <b>${esc(filterLabel())}</b>`:''}</span>
+     <button class="filterbtn" id="filterbtn" type="button">Filter &amp; Sort</button>
+     <div class="row deskonly"><input id="shopq" type="search" placeholder="Search menu" value="${esc(q)}" aria-label="Search menu">
      <label class="row" style="color:var(--muted)">Sort by:<select id="sort"><option value="newest">Newest</option><option value="low">Price, low to high</option><option value="high">Price, high to low</option><option value="name">Name A–Z</option></select></label></div></div>
-    <div class="grid">${list.map(p=>`<button class="card" data-p="${p.id}"><div class="img">${p.featured?'<span class="tag">Hot</span>':''}${art(p)}</div><div class="nm">${esc(p.name)}</div><div class="pr ${p.stock<=0?'oos':''}">${p.stock<=0?'Out of stock':money(p.price)}</div></button>`).join('')||'<p class="note">No products match. Try another category.</p>'}</div>
+    <div class="grid">${list.map(p=>`<div class="card"><button class="img" data-p="${p.id}" aria-label="${esc(p.name)} details">${p.featured?'<span class="tag">Hot</span>':''}${art(p)}</button><button class="nm" data-p="${p.id}">${esc(p.name)}</button><div class="pr ${p.stock<=0?'oos':''}">${p.stock<=0?'Out of stock':money(p.price)}${p.size?` <span>· ${esc(p.size)}</span>`:''}</div>
+     ${p.stock>0?`<div class="cardbuy"><div class="cq"><button type="button" data-cq2="-1" aria-label="Less">−</button><span class="num">1</span><button type="button" data-cq2="1" data-max="${p.stock}" aria-label="More">+</button></div><button type="button" class="btn addbtn" data-quick="${p.id}">Add to cart</button></div>`:''}</div>`).join('')||'<p class="note">No products match. Try another category.</p>'}</div>
    </section></div>`;
   $('#sort').value=sortBy;
 }
@@ -272,7 +300,12 @@ document.addEventListener('click',e=>{
   const t=e.target.closest('button,a,[data-close]');if(!t)return;
   if(t.matches('[data-close]')){$('#layer').innerHTML='';return}
   if(t.id==='cartbtn'){openCart();return}
-  if(t.dataset.f){shopFilter={type:t.dataset.f,val:t.dataset.v||null};vShop($('#view'));return}
+  if(t.dataset.f){shopFilter={type:t.dataset.f,val:t.dataset.v||null};if(t.closest('.fsheet'))$('#layer').innerHTML='';if(route!=='shop')location.hash='#shop';else{vShop($('#view'));window.scrollTo(0,0)}return}
+  if(t.id==='filterbtn'){openFilters();return}
+  if(t.dataset.cq2){const box=t.closest('.cq'),sp=box.querySelector('span'),max=+box.querySelector('[data-max]').dataset.max;sp.textContent=Math.max(1,Math.min(max,+sp.textContent+ +t.dataset.cq2));return}
+  if(t.dataset.quick){const n=+t.closest('.cardbuy').querySelector('.cq span').textContent;addToCart(t.dataset.quick,n);t.textContent='Added ✓';setTimeout(()=>{t.textContent='Add to cart'},1200);return}
+  if(t.id==='jz-pickup'){$('#zip-out').innerHTML='<div class="zc-res no"><b>Pickup isn\'t available.</b><span>Cargo+420 is delivery only. Enter your ZIP code below.</span></div>';return}
+  if(t.id==='menubtn'){const n=$('#nav'),o=!n.classList.contains('open');n.classList.toggle('open',o);t.setAttribute('aria-expanded',o);return}
   if(t.dataset.p){openProduct(t.dataset.p);return}
   if(t.dataset.mq){const el=$('#mq');el.textContent=Math.max(1,+el.textContent+ +t.dataset.mq);return}
   if(t.dataset.add){addToCart(t.dataset.add,+$('#mq').textContent);$('#layer').innerHTML='';return}
@@ -287,11 +320,12 @@ document.addEventListener('click',e=>{
 let qT;
 document.addEventListener('change',e=>{
   const t=e.target;
-  if(t.id==='sort'){sortBy=t.value;vShop($('#view'));return}
+  if(t.id==='sort'||t.id==='sort2'){sortBy=t.value;vShop($('#view'));return}
   if(t.id==='co-city'||t.id==='co-phone'){readCo();refreshQuote();return}
 });
 document.addEventListener('input',e=>{
   if(e.target.id==='shopq'){clearTimeout(qT);qT=setTimeout(()=>{q=e.target.value;vShop($('#view'));const i=$('#shopq');i.focus();i.setSelectionRange(q.length,q.length)},250)}
+  if(e.target.id==='shopq2'){clearTimeout(qT);qT=setTimeout(()=>{q=e.target.value;vShop($('#view'))},250)}
 });
 document.addEventListener('submit',e=>{e.preventDefault();if(e.target.id==='cof')placeOrder();if(e.target.id==='memf')applyMember(e.target);if(e.target.id==='zipf')checkZip($('#zip-in').value)});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#layer').innerHTML=''});

@@ -10,7 +10,7 @@
 <link rel="icon" href="img/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wdth,wght@100..125,400..800&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -37,8 +37,11 @@
       <a href="#members" data-r="members">Membership</a>
       <a href="#events" data-r="events">Events</a>
       <a href="#areas" data-r="areas">Service area</a>
-      <button class="cartbtn" id="cartbtn">Cart <span class="n" id="cartn">0</span></button>
     </nav>
+    <div class="topact">
+      <button class="cartbtn" id="cartbtn">Cart <span class="n" id="cartn">0</span></button>
+      <button class="menubtn" id="menubtn" aria-label="Menu" aria-expanded="false" aria-controls="nav"><span></span><span></span><span></span></button>
+    </div>
   </div>
 </header>
 <main id="view"><div class="loading">Loading menu…</div></main>
