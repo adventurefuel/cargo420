@@ -224,7 +224,7 @@ function aInventory(B){
    <div id="pformwrap"></div>
    <p class="note" style="margin:0">Stock drops when an order is placed and comes back if you cancel it. At 0 the shop shows “Out of stock”.</p>
    <div class="tblwrap"><table><thead><tr><th></th><th>Product</th><th>Category</th><th class="r">Price</th><th class="r">Stock</th><th>Status</th><th>Hot</th><th>On menu</th><th></th></tr></thead><tbody>
-  ${list.map(p=>`<tr style="${p.active?'':'opacity:.55'}"><td><div class="thumb">${art(p)}</div></td><td><b>${esc(p.name)}</b></td><td>${catName(p.cat)}</td><td class="r"><input class="n num" type="number" step="0.5" min="0" data-price="${p.id}" value="${Number(p.price)}"></td><td class="r"><input class="n num" type="number" min="0" data-stock="${p.id}" value="${p.stock}"></td>
+  ${list.map(p=>`<tr style="${p.active?'':'opacity:.55'}"><td><div class="thumb">${art(p)}</div></td><td><b>${esc(p.name)}</b></td><td>${catName(p.cat)}</td><td class="r"><input class="n num" type="number" step="0.5" min="0" data-price="${p.id}" value="${Number(p.price)}"></td><td class="r">${p.options?`<button class="linkbtn" data-edit="${p.id}" title="Stock is set per option">${p.stock} · options</button>`:`<input class="n num" type="number" min="0" data-stock="${p.id}" value="${p.stock}">`}</td>
    <td>${p.stock<=0?'<span class="pill p-cancelled">Sold out</span>':p.stock<=3?'<span class="pill p-out">Low</span>':'<span class="pill p-delivered">In stock</span>'}</td>
    <td><input type="checkbox" data-feat="${p.id}" ${p.featured?'checked':''} aria-label="Hot"></td><td><input type="checkbox" data-active="${p.id}" ${p.active?'checked':''} aria-label="On menu"></td><td><button class="linkbtn" data-edit="${p.id}">Edit</button></td></tr>`).join('')}</tbody></table></div></div>`;
   if(editing)drawPForm();
@@ -236,6 +236,10 @@ function drawPForm(){
    <div class="three"><label>Price ($)<input id="pf-price" type="number" step="0.01" min="0" value="${Number(p.price)}"></label><label>Stock<input id="pf-stock" type="number" min="0" value="${p.stock}"></label><label>Size<input id="pf-size" value="${esc(p.size||'')}" placeholder="3.5g"></label></div>
    <div class="three"><label>THC / strength<input id="pf-thc" value="${esc(p.thc||'')}" placeholder="28% THC"></label><label>Strain type<input id="pf-strain" value="${esc(p.strain||'')}" placeholder="Hybrid"></label><label>Filters (comma separated)<input id="pf-tags" value="${esc(p.tags.join(', '))}" placeholder="Hybrid, 3.5 grams"></label></div>
    <label>Description<textarea id="pf-desc" rows="2">${esc(p.description||'')}</textarea></label>
+   <div class="two"><label>Option name (leave blank if none)<input id="pf-optname" value="${esc(p.options?.name||'')}" placeholder="Strain, Size, Flavor"></label><div></div></div>
+   <label>Options, one per line: name | price | stock<textarea id="pf-opts" rows="4" class="mono" style="font-size:13px" placeholder="3.5g | 25 | 20
+28g | 90 | 5">${esc((p.options?.choices||[]).map(c=>`${c.label} | ${c.price} | ${c.stock}`).join('\n'))}</textarea></label>
+   <p class="note" style="margin:0">With options, the customer must pick one. Price and stock above are then filled in from the options.</p>
    <div class="row"><div class="thumb" style="width:72px;height:72px">${art({...p,id:p.id||'new'})}</div><label style="flex:1">Photo (JPG, PNG or WebP, under 5 MB)<input id="pf-photo" type="file" accept="image/jpeg,image/png,image/webp"></label></div>
    <div class="row"><label class="toggle"><input type="checkbox" id="pf-feat" ${p.featured?'checked':''}> Hot / most liked</label><label class="toggle"><input type="checkbox" id="pf-active" ${p.active?'checked':''}> Show on menu</label></div>
    <div class="row"><button class="btn" id="pf-save">Save product</button>${editing!=='new'?`<button type="button" class="btn red sm" data-pdel="${p.id}">Delete product</button><span id="pdel-c" hidden><button type="button" class="btn red sm" data-pdelyes="${p.id}">Yes, delete it</button></span>`:''}</div></form>`;
@@ -244,6 +248,12 @@ async function saveProduct(){
   const btn=$('#pf-save');btn.disabled=true;btn.textContent='Saving…';
   const rec={name:$('#pf-name').value.trim(),cat:$('#pf-cat').value,price:Math.max(0,+$('#pf-price').value||0),stock:Math.max(0,parseInt($('#pf-stock').value)||0),size:$('#pf-size').value.trim()||null,thc:$('#pf-thc').value.trim()||null,strain:$('#pf-strain').value.trim()||null,
     tags:$('#pf-tags').value.split(',').map(s=>s.trim()).filter(Boolean),description:$('#pf-desc').value.trim()||null,featured:$('#pf-feat').checked,active:$('#pf-active').checked};
+  const optLines=$('#pf-opts').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(optLines.length){
+    const bad=[];const ch=optLines.map(l=>{const [label,price,stock]=l.split('|').map(x=>(x||'').trim());if(!label||isNaN(parseFloat(price)))bad.push(l);return{label,price:Math.max(0,parseFloat(price)||0),stock:Math.max(0,parseInt(stock)||0)}});
+    if(bad.length){toast('Fix the option lines','Use: name | price | stock. Problem: '+bad[0]);btn.disabled=false;btn.textContent='Save product';return}
+    rec.options={name:$('#pf-optname').value.trim()||'Option',choices:ch};rec.price=Math.min(...ch.map(c=>c.price));rec.stock=ch.reduce((s,c)=>s+c.stock,0);
+  }else rec.options=null;
   if(!rec.name){toast('Add a product name','',true);btn.disabled=false;btn.textContent='Save product';return}
   const file=$('#pf-photo').files[0];
   try{

@@ -16,6 +16,7 @@ const CATS=[
  {id:'vapes',name:'Vapes',blurb:'Disposables · Carts'},
  {id:'enhance',name:'Sexual Enhancements',blurb:'Oils · Gummies'},
  {id:'smoke',name:'Smokers Supplies',blurb:'Wraps · Papers · Glass'},
+ {id:'kratom',name:'Kratom',blurb:'Powders'},
 ];
 const ICONS={
  flower:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M24 42V24M24 24c0-9 0-14 0-20 4 6 5 13 0 20zM24 24c-5-6-11-9-18-9 3 7 10 10 18 9zM24 24c5-6 11-9 18-9-3 7-10 10-18 9zM24 26c-4 2-9 3-14 2 3 4 9 5 14-2zM24 26c4 2 9 3 14 2-3 4-9 5-14-2z"/></svg>',

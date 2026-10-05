@@ -465,3 +465,13 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
   .sa-rules{grid-template-columns:1fr 1fr;gap:16px 12px}
 }
 @media (prefers-reduced-motion:reduce){.sa-plate{transform:none}}
+/* product options */
+.optgrp{display:grid;gap:8px}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opt{display:grid;gap:1px;text-align:left;border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:8px 12px;color:var(--text);min-width:0}
+.opt span{font-size:14px;font-weight:600}
+.opt small{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.opt.on{border-color:var(--yellow);box-shadow:0 0 0 1px var(--yellow);background:#2a250f}
+.opt.on small{color:var(--yellow)}
+.opt:disabled{opacity:.4;cursor:not-allowed;text-decoration:line-through}
+.pdesc{margin:0;color:var(--muted);font-size:14px;line-height:1.55;max-height:220px;overflow:auto}

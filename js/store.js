@@ -2,10 +2,15 @@
 const HOME_CATS=['flower','edibles','cbd','concentrates','mushrooms','vapes','enhance'];
 const D={products:[],zones:[],settings:{},tiers:[],events:[],zips:{}};
 const prod=id=>D.products.find(p=>p.id===id);
+const choices=p=>p&&p.options&&Array.isArray(p.options.choices)?p.options.choices:null;
+const choiceOf=(p,opt)=>(choices(p)||[]).find(c=>c.label===opt)||null;
+const itemPrice=(p,opt)=>{const c=choiceOf(p,opt);return c?Number(c.price):Number(p.price)};
+const itemStock=(p,opt)=>{const c=choiceOf(p,opt);return c?Number(c.stock):Number(p.stock)};
+const fromPrice=p=>{const ch=choices(p);if(!ch)return money(p.price);const ps=ch.map(c=>Number(c.price)),lo=Math.min(...ps);return (Math.max(...ps)>lo?'From ':'')+money(lo)};
 const allCities=()=>D.zones.flatMap(z=>z.cities).sort((a,b)=>a.localeCompare(b));
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 let cart=store.get('c420cart',[]);
-function saveCart(){cart=cart.filter(x=>prod(x.id)&&x.qty>0);store.set('c420cart',cart);$('#cartn').textContent=cart.reduce((s,x)=>s+x.qty,0)}
+function saveCart(){cart=cart.filter(x=>{const p=prod(x.id);return p&&x.qty>0&&(!choices(p)||choiceOf(p,x.opt))});store.set('c420cart',cart);$('#cartn').textContent=cart.reduce((s,x)=>s+x.qty,0)}
 
 async function loadAll(){
   const [p,z,s,t,e,zz]=await Promise.all([
@@ -215,31 +220,38 @@ function vShop(V){
      <button class="filterbtn" id="filterbtn" type="button">Filter &amp; Sort</button>
      <div class="row deskonly"><input id="shopq" type="search" placeholder="Search menu" value="${esc(q)}" aria-label="Search menu">
      <label class="row" style="color:var(--muted)">Sort by:<select id="sort"><option value="newest">Newest</option><option value="low">Price, low to high</option><option value="high">Price, high to low</option><option value="name">Name A–Z</option></select></label></div></div>
-    <div class="grid">${list.map(p=>`<div class="card"><button class="img" data-p="${p.id}" aria-label="${esc(p.name)} details">${p.featured?'<span class="tag">Hot</span>':''}${art(p)}</button><button class="nm" data-p="${p.id}">${esc(p.name)}</button><div class="pr ${p.stock<=0?'oos':''}">${p.stock<=0?'Out of stock':money(p.price)}${p.size?` <span>· ${esc(p.size)}</span>`:''}</div>
-     ${p.stock>0?`<div class="cardbuy"><div class="cq"><button type="button" data-cq2="-1" aria-label="Less">−</button><span class="num">1</span><button type="button" data-cq2="1" data-max="${p.stock}" aria-label="More">+</button></div><button type="button" class="btn addbtn" data-quick="${p.id}">Add to cart</button></div>`:''}</div>`).join('')||'<p class="note">No products match. Try another category.</p>'}</div>
+    <div class="grid">${list.map(p=>`<div class="card"><button class="img" data-p="${p.id}" aria-label="${esc(p.name)} details">${p.featured?'<span class="tag">Hot</span>':''}${art(p)}</button><button class="nm" data-p="${p.id}">${esc(p.name)}</button><div class="pr ${p.stock<=0?'oos':''}">${p.stock<=0?'Out of stock':fromPrice(p)}${p.size?` <span>· ${esc(p.size)}</span>`:''}</div>
+     ${p.stock>0&&choices(p)?`<div class="cardbuy"><button type="button" class="btn addbtn" data-p="${p.id}">Choose ${esc((p.options.name||'option').toLowerCase())}</button></div>`:p.stock>0?`<div class="cardbuy"><div class="cq"><button type="button" data-cq2="-1" aria-label="Less">−</button><span class="num">1</span><button type="button" data-cq2="1" data-max="${p.stock}" aria-label="More">+</button></div><button type="button" class="btn addbtn" data-quick="${p.id}">Add to cart</button></div>`:''}</div>`).join('')||'<p class="note">No products match. Try another category.</p>'}</div>
    </section></div>`;
   $('#sort').value=sortBy;
 }
+let selOpt=null,curP=null;
 function openProduct(id){
-  const p=prod(id);if(!p)return;
-  const maxOff=Math.max(0,...D.tiers.map(t=>t.pct_off)),minOff=Math.min(...D.tiers.map(t=>t.pct_off));
+  const p=prod(id);if(!p)return;curP=id;
+  const ch=choices(p);selOpt=ch?(ch.find(c=>c.stock>0)||{}).label||null:null;
   $('#layer').innerHTML=`<div class="scrim" data-close></div><div class="modal"><div class="box" role="dialog" aria-label="${esc(p.name)}">
    <div class="pimg">${art(p)}</div>
-   <div class="pinfo"><div class="row" style="justify-content:space-between"><span class="eyebrow">${catName(p.cat)}</span><button class="x" data-close aria-label="Close">×</button></div>
-    <h2>${esc(p.name)}</h2>
-    <div class="chips">${[p.strain,p.thc,p.size].filter(Boolean).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>
-    <div class="num" style="font-size:26px;font-weight:600">${money(p.price)}</div>
-    ${D.tiers.length?`<div class="note">Members pay ${money(p.price*(1-minOff/100))}–${money(p.price*(1-maxOff/100))}</div>`:''}
-    ${p.description?`<p style="margin:0">${esc(p.description)}</p>`:''}
-    ${p.stock<=0?'<div class="warnbox">Out of stock. Check back soon.</div>':`<div class="row"><div class="qty"><button data-mq="-1" aria-label="Less">−</button><span class="num" id="mq">1</span><button data-mq="1" aria-label="More">+</button></div><button class="btn" data-add="${p.id}">Add to cart</button></div>${p.stock<=3?`<div class="note">Only ${p.stock} left</div>`:''}`}
-   </div></div></div>`;
+   <div class="pinfo" id="pinfo"></div></div></div>`;
+  drawProduct(p);
 }
-function addToCart(id,qty){const p=prod(id);const ex=cart.find(x=>x.id===id);const n=Math.min(p.stock,(ex?ex.qty:0)+qty);ex?ex.qty=n:cart.push({id,qty:n});saveCart();toast(`Added ${p.name}`,'',true)}
-const cartSub=()=>cart.reduce((s,x)=>s+(prod(x.id)?.price||0)*x.qty,0);
+function drawProduct(p){
+  const ch=choices(p),maxOff=Math.max(0,...D.tiers.map(t=>t.pct_off)),minOff=Math.min(...D.tiers.map(t=>t.pct_off));
+  const price=ch&&selOpt?itemPrice(p,selOpt):Number(p.price),stock=ch?(selOpt?itemStock(p,selOpt):0):p.stock;
+  $('#pinfo').innerHTML=`<div class="row" style="justify-content:space-between"><span class="eyebrow">${catName(p.cat)}</span><button class="x" data-close aria-label="Close">×</button></div>
+    <h2>${esc(p.name)}</h2>
+    <div class="chips">${[p.strain,p.thc,p.size,...(p.tags||[])].filter(Boolean).slice(0,4).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>
+    ${ch?`<div class="optgrp"><div class="eyebrow">${esc(p.options.name||'Options')}</div><div class="opts">${ch.map(c=>`<button type="button" class="opt${c.label===selOpt?' on':''}" data-opt="${esc(c.label)}" ${c.stock>0?'':'disabled'}><span>${esc(c.label)}</span><small>${c.stock>0?money(c.price):'Sold out'}</small></button>`).join('')}</div></div>`:''}
+    <div class="num" style="font-size:26px;font-weight:600">${money(price)}</div>
+    ${D.tiers.length?`<div class="note">Members pay ${money(price*(1-minOff/100))}–${money(price*(1-maxOff/100))}</div>`:''}
+    ${p.stock<=0||(ch&&!selOpt)?'<div class="warnbox">Out of stock. Check back soon.</div>':`<div class="row"><div class="qty"><button data-mq="-1" aria-label="Less">−</button><span class="num" id="mq">1</span><button data-mq="1" aria-label="More">+</button></div><button class="btn" data-add="${p.id}">Add to cart</button></div>${stock<=3?`<div class="note">Only ${stock} left</div>`:''}`}
+    ${p.description?`<p class="pdesc">${esc(p.description)}</p>`:''}`;
+}
+function addToCart(id,qty,opt){const p=prod(id);opt=choices(p)?opt:undefined;const ex=cart.find(x=>x.id===id&&(x.opt||null)===(opt||null));const n=Math.min(itemStock(p,opt),(ex?ex.qty:0)+qty);if(n<=0)return toast('That option is sold out','',true);ex?ex.qty=n:cart.push(opt?{id,opt,qty:n}:{id,qty:n});saveCart();toast(`Added ${p.name}${opt?' · '+opt:''}`,'',true)}
+const cartSub=()=>cart.reduce((s,x)=>{const p=prod(x.id);return s+(p?itemPrice(p,x.opt):0)*x.qty},0);
 function openCart(){
   saveCart();const sub=cartSub(),base=Number(D.settings.base_min),low=sub<base;
   $('#layer').innerHTML=`<div class="scrim" data-close></div><aside class="drawer" role="dialog" aria-label="Cart"><header><h2 style="font-size:30px">Your cart</h2><button class="x" data-close aria-label="Close">×</button></header>
-   <div class="body">${cart.length?cart.map(x=>{const p=prod(x.id);return`<div class="line"><div class="th">${art(p)}</div><div><div style="font-size:14px">${esc(p.name)}</div><div class="note num">${money(p.price)}</div></div><div class="qty"><button data-cq="${x.id}" data-d="-1" aria-label="Less">−</button><span class="num">${x.qty}</span><button data-cq="${x.id}" data-d="1" aria-label="More">+</button></div></div>`}).join(''):'<p class="note">Your cart is empty. Tap a category on the home page to start.</p>'}</div>
+   <div class="body">${cart.length?cart.map((x,i)=>{const p=prod(x.id);return`<div class="line"><div class="th">${art(p)}</div><div><div style="font-size:14px">${esc(p.name)}</div>${x.opt?`<div class="note">${esc(x.opt)}</div>`:''}<div class="note num">${money(itemPrice(p,x.opt))}</div></div><div class="qty"><button data-cq="${i}" data-d="-1" aria-label="Less">−</button><span class="num">${x.qty}</span><button data-cq="${i}" data-d="1" aria-label="More">+</button></div></div>`}).join(''):'<p class="note">Your cart is empty. Tap a category on the home page to start.</p>'}</div>
    ${cart.length?`<div class="totals"><div><span>Subtotal</span><span class="num">${money(sub)}</span></div>${low?`<div class="warnbox">Add ${money(base-sub)} more. We don't deliver orders under $${base}.</div>`:''}${!D.settings.open?'<div class="warnbox">We are closed right now.</div>':''}<button class="btn" data-go="checkout" ${low||!D.settings.open?'disabled':''}>Check out · cash on delivery</button></div>`:''}
   </aside>`;
 }
@@ -356,8 +368,9 @@ document.addEventListener('click',e=>{
   if(t.id==='menubtn'){const n=$('#nav'),o=!n.classList.contains('open');n.classList.toggle('open',o);t.setAttribute('aria-expanded',o);return}
   if(t.dataset.p){openProduct(t.dataset.p);return}
   if(t.dataset.mq){const el=$('#mq');el.textContent=Math.max(1,+el.textContent+ +t.dataset.mq);return}
-  if(t.dataset.add){addToCart(t.dataset.add,+$('#mq').textContent);$('#layer').innerHTML='';return}
-  if(t.dataset.cq){const x=cart.find(c=>c.id===t.dataset.cq);const p=prod(x.id);x.qty=Math.min(p.stock,x.qty+ +t.dataset.d);saveCart();openCart();return}
+  if(t.dataset.opt!==undefined){selOpt=t.dataset.opt;const p=prod(curP);if(p)drawProduct(p);return}
+  if(t.dataset.add){addToCart(t.dataset.add,+$('#mq').textContent,selOpt);$('#layer').innerHTML='';return}
+  if(t.dataset.cq!==undefined){const x=cart[+t.dataset.cq];if(!x)return;const p=prod(x.id);x.qty=Math.min(itemStock(p,x.opt),x.qty+ +t.dataset.d);saveCart();openCart();return}
   if(t.dataset.go){$('#layer').innerHTML='';location.hash='#'+t.dataset.go;return}
   if(t.dataset.tier){$('#m-tier').value=t.dataset.tier;$('#memf').scrollIntoView({behavior:'smooth'});$('#m-name').focus({preventScroll:true});return}
   if(t.dataset.rsvp){rsvp(t.dataset.rsvp);return}
