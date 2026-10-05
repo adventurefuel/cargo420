@@ -475,3 +475,11 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .opt.on small{color:var(--yellow)}
 .opt:disabled{opacity:.4;cursor:not-allowed;text-decoration:line-through}
 .pdesc{margin:0;color:var(--muted);font-size:14px;line-height:1.55;max-height:220px;overflow:auto}
+/* product modal: keep photo inside the box */
+.modal .pimg{min-width:0;overflow:hidden}
+.modal .pimg img{object-fit:contain;max-width:100%}
+@media (max-width:900px){
+  .modal .box{grid-template-columns:minmax(0,1fr)}
+  .modal .pimg{aspect-ratio:auto;height:min(42vh,380px)}
+  .modal .pimg svg{height:90%}
+}
