@@ -483,3 +483,11 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
   .modal .pimg{aspect-ratio:auto;height:min(42vh,380px)}
   .modal .pimg svg{height:90%}
 }
+/* shop grid: bigger photos, 4 across on desktop (matches the old site) */
+.grid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:30px 20px}
+.card .img{aspect-ratio:1}
+.card .img img{object-fit:cover}
+.card .nm{font-size:15px;margin-top:4px}
+.card .pr{font-size:14px}
+@media (min-width:1400px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:600px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 14px}}
