@@ -29,7 +29,7 @@ async function loadAll(){
 let route='home',shopFilter={type:'all',val:null},sortBy='newest',q='';
 function go(){
   const h=(location.hash||'#home').slice(1);
-  route=['home','shop','members','events','areas','checkout','done'].includes(h)?h:'home';
+  route=['home','shop','specials','members','events','areas','checkout','done'].includes(h)?h:'home';
   if(CATS.some(c=>c.id===h)){route='shop';shopFilter={type:'cat',val:h}}
   render();window.scrollTo(0,0);
 }
@@ -39,11 +39,52 @@ function render(){
   const b=$('#banner');
   if(!D.settings.open){b.className='banner closed';b.textContent='We are closed right now and not taking orders. Hours: '+D.settings.hours}
   else{b.className='banner';b.textContent=`Cash on delivery only · $${Number(D.settings.base_min)} minimum on every order · Valid 21+ ID checked at delivery · Hours ${D.settings.hours}`}
-  ({home:vHome,shop:vShop,members:vMembers,events:vEvents,areas:vAreas,checkout:vCheckout,done:vDone}[route])($('#view'));
+  ({home:vHome,shop:vShop,specials:vSpecials,members:vMembers,events:vEvents,areas:vAreas,checkout:vCheckout,done:vDone}[route])($('#view'));
   saveCart();
 }
 
 /* ---------- home ---------- */
+/* ---------- specials ---------- */
+function detroitNow(){const f=new Intl.DateTimeFormat('en-US',{timeZone:'America/Detroit',weekday:'short',hour:'numeric',minute:'numeric',hour12:false}).formatToParts(new Date());const g=t=>f.find(x=>x.type===t)?.value;return{day:g('weekday'),h:+g('hour')%24,m:+g('minute')}}
+function happyHourStatus(){const {day,h,m}=detroitNow();const days=['Mon','Tue','Wed','Thu'];const mins=h*60+m;
+  if(days.includes(day)&&mins>=660&&mins<900){const left=900-mins;return{on:true,text:`Happy Hour is on now · ${Math.floor(left/60)?Math.floor(left/60)+'h ':''}${left%60}m left to order`}}
+  if(days.includes(day)&&mins<660)return{on:false,text:'Happy Hour starts today at 11am'};
+  const next=day==='Thu'||day==='Fri'||day==='Sat'||day==='Sun'?'Monday':'tomorrow';return{on:false,text:`Next Happy Hour: ${next} at 11am`}}
+const dealProd=n=>D.products.find(p=>p.name.toLowerCase()===n.toLowerCase());
+function freeGiftFor(sub){if(sub>=100)return{label:'$100+ order',choices:['Free shake','5 free pre-rolls']};if(sub>=65)return{label:'$65+ order',choices:['3 free pre-rolls']};return{label:'Every order',choices:['2 free pre-rolls']}}
+function vSpecials(V){
+  const hh=happyHourStatus(),sfv=dealProd('SFV OG'),bolo=dealProd('Bolo Runtz');
+  V.innerHTML=`<div class="sp">
+  <section class="sp-hh${hh.on?' on':''}"><div class="wrap">
+   <div class="sp-hhcard">
+    <div class="sp-status"><i></i>${esc(hh.text)}</div>
+    <h1>Happy Hour!!</h1>
+    <div class="sp-when"><div><small>Days</small><b>Mon – Thu</b></div><div><small>Hours</small><b>11am – 3pm</b></div></div>
+    <p class="sp-rule">Order must be placed by 3pm. <b>No exceptions.</b></p>
+    <div class="sp-mins">
+     <div><b>$25</b><span>minimum · Detroit &amp; most surrounding Wayne County cities</span></div>
+     <div><b>$50</b><span>minimum · Oakland County</span></div>
+     <div><b>$50</b><span>minimum · Macomb County</span></div>
+    </div>
+   </div></div></section>
+
+  <section class="wrap sp-deals">
+   <div class="sp-head"><span class="eyebrow">Every day</span><h2>Daily deals</h2></div>
+   <div class="sp-feature">
+    ${[sfv,bolo].filter(Boolean).map(p=>`<button class="sp-prod" data-p="${p.id}"><div class="sp-img">${art(p)}</div><div class="sp-pinfo"><b>${esc(p.name)}</b><span>3.5g <em>$15</em> · 28g <em>$70</em></span><u>Choose size →</u></div></button>`).join('')}
+    <div class="sp-price"><span>SFV OG &amp; Bolo Runtz</span><b>$15</b><small>for 3.5g</small><b>$70</b><small>for 28g</small></div>
+   </div>
+   <div class="sp-head" style="margin-top:36px"><span class="eyebrow">Free with your order</span><h2>The more you order,<br>the more you get</h2></div>
+   <ol class="sp-ladder">
+    <li><div class="sp-tier">$100+</div><div><b>THC order</b><span>Choose a free shake or 5 pre-rolls</span></div></li>
+    <li><div class="sp-tier">$65+</div><div><b>Any order</b><span>Choose 3 free pre-rolls</span></div></li>
+    <li><div class="sp-tier">Under $65</div><div><b>Every order</b><span>2 free pre-rolls with your order</span></div></li>
+   </ol>
+   <p class="note">Pick your free item at checkout.</p>
+   <a class="btn sp-cta" href="#shop">Shop the menu →</a>
+  </section></div>`;
+}
+
 function vHome(V){
   V.innerHTML=`<div class="wrap">
   <section class="hero"><img src="img/logo.webp" alt="Cargo+420 Exclusive Delivery Service"><p>Metro Detroit cannabis delivery. Pick a category, build your order, pay cash at the door.</p>
@@ -271,6 +312,7 @@ function vCheckout(V){
    <label>Mobile number<input id="co-phone" required inputmode="tel" autocomplete="tel" placeholder="(313) 555-0100" value="${esc(co.phone)}"></label></div>
    <label>Street address<input id="co-address" required autocomplete="street-address" value="${esc(co.address)}"></label>
    <label>City<select id="co-city" required><option value="">Choose your city</option>${allCities().map(c=>`<option ${c===co.city?'selected':''}>${esc(c)}</option>`).join('')}</select></label>
+   <div id="co-gift"></div>
    <label>Delivery notes (optional)<textarea id="co-notes" rows="2" maxlength="300" placeholder="Gate code, parking, best way to reach you">${esc(co.notes)}</textarea></label>
    <label class="check"><input type="checkbox" id="co-age"> <span>I'm 21 or older and will show a valid government ID to the driver. I'll meet the driver at their vehicle with cash ready.</span></label>
    <div id="co-err" class="warnbox" hidden></div>
@@ -280,10 +322,14 @@ function vCheckout(V){
   <aside class="summary" id="summary"><p class="note">Calculating…</p></aside></div></div>`;
   refreshQuote();
 }
+function drawGift(sub){
+  const el=$('#co-gift');if(!el)return;const g=freeGiftFor(sub),cur=$('#co-giftsel')?.value||co.gift||'';
+  el.innerHTML=`<label class="gift">Free with your order <small>(${esc(g.label)})</small><select id="co-giftsel">${g.choices.map(c=>`<option ${c===cur?'selected':''}>${esc(c)}</option>`).join('')}</select></label>`;
+}
 function drawSummary(){
   const el=$('#summary');if(!el)return;
   if(!quote){el.innerHTML='<p class="note">Couldn\'t load prices. Check your connection.</p>';return}
-  const Q=quote;
+  const Q=quote;drawGift(Number(Q.subtotal)-Number(Q.discount));
   el.innerHTML=`<h2 style="font-size:26px">Order summary</h2>
    ${Q.lines.map(x=>`<div class="row" style="justify-content:space-between;font-size:14px"><span>${x.qty} × ${esc(x.name)}</span><span class="num">${money(x.price*x.qty)}</span></div>`).join('')}
    <div class="totals"><div><span>Subtotal</span><span class="num">${money(Q.subtotal)}</span></div>
@@ -295,14 +341,14 @@ function drawSummary(){
    ${Q.errors.length?`<div class="warnbox">${esc(Q.errors[0])}</div>`:''}`;
   const b=$('#co-submit');if(b)b.textContent=`Place order · ${money(Q.total)} cash`;
 }
-function readCo(){co={name:$('#co-name').value.trim(),phone:$('#co-phone').value.trim(),address:$('#co-address').value.trim(),city:$('#co-city').value,notes:$('#co-notes').value.trim(),age:$('#co-age').checked};store.set('c420co',{...co,age:undefined})}
+function readCo(){const gs=$('#co-giftsel');co={gift:gs?gs.value:'',name:$('#co-name').value.trim(),phone:$('#co-phone').value.trim(),address:$('#co-address').value.trim(),city:$('#co-city').value,notes:$('#co-notes').value.trim(),age:$('#co-age').checked};store.set('c420co',{...co,age:undefined})}
 async function placeOrder(){
   if(placing)return;readCo();const e=$('#co-err');e.hidden=true;
   const miss=[];if(!co.name)miss.push('your name');if(co.phone.replace(/\D/g,'').length<10)miss.push('a 10-digit mobile number');if(!co.address)miss.push('your street address');if(!co.city)miss.push('your city');
   if(miss.length){e.hidden=false;e.textContent='Please add '+miss.join(', ')+'.';return}
   if(!co.age){e.hidden=false;e.textContent='Confirm you are 21+ and will show ID at delivery.';return}
   placing=true;const b=$('#co-submit');b.disabled=true;b.textContent='Placing order…';
-  const {data,error}=await sb.rpc('place_order',{p_items:cart,p_name:co.name,p_phone:co.phone,p_address:co.address,p_city:co.city,p_notes:co.notes,p_age_ok:co.age});
+  const {data,error}=await sb.rpc('place_order',{p_items:cart,p_name:co.name,p_phone:co.phone,p_address:co.address,p_city:co.city,p_notes:[co.gift?'FREE: '+co.gift:'',co.notes].filter(Boolean).join(' · '),p_age_ok:co.age});
   placing=false;
   if(error){e.hidden=false;e.textContent=errMsg(error);b.disabled=false;refreshQuote();return}
   store.set('c420last',{...data,name:co.name,phone:co.phone});cart=[];saveCart();
