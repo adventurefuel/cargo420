@@ -405,18 +405,14 @@ function dropBanner(){
 function dropFeature(){
   const p=curDrop();if(!p)return'';const st=dropState(p);
   if(st==='sold'&&Date.now()-dropT(p)>3*864e5)return'';
-  const c=cd(dropT(p)-Date.now()),qty=Math.max(1,p.drop_qty||p.stock||1),value=Number(p.drop_value||0),spooky=/hallow/i.test(p.name)?' spooky':'';
-  const clock=st==='soon'||st==='early'?`<div class="df-cd">${c.d?`<div><b class="num" data-fu="d">${c.d}</b><small>days</small></div>`:''}<div><b class="num" data-fu="h">${c.h}</b><small>hrs</small></div><div><b class="num" data-fu="m">${c.m}</b><small>min</small></div><div><b class="num" data-fu="s">${c.s}</b><small>sec</small></div></div>`:'';
-  return`<a class="dropfeat ${st}${spooky}" href="#drop" data-fst="${st}">
+  const c=cd(dropT(p)-Date.now()),qty=Math.max(1,p.drop_qty||p.stock||1),value=Number(p.drop_value||0);
+  const clock=st==='soon'||st==='early'?`<span class="df-cd num">${c.d?`<b data-fu="d">${c.d}</b>d `:''}<b data-fu="h">${c.h}</b>:<b data-fu="m">${c.m}</b>:<b data-fu="s">${c.s}</b></span>`:st==='live'?`<span class="df-cd num"><b>${p.stock}</b>/${qty} left</span>`:'';
+  const sub=st==='sold'?`Gone${p.sold_out_at?' in '+sellTime(p):''} · next drop soon`:`${st==='live'?'':esc(dropWhen(p))+' · '}${money(p.price)}${value>Number(p.price)?` · ${money(value)}+ value`:''}`;
+  return`<a class="dropfeat ${st}" href="#drop" data-fst="${st}">
    <div class="df-art">${p.image_url?art(p):dropArt(p)}</div>
-   <div class="df-body">
-    <span class="df-eye">${st==='live'?'Live now':st==='sold'?'Sold out':st==='early'?esc(tierName(p.early_tier))+' early access':'Next drop'} · Cargo Drop ${dropNo(p)}</span>
-    <b class="df-name">${esc(p.name)}</b>
-    <span class="df-when">${st==='sold'?`Gone${p.sold_out_at?' in '+sellTime(p):''}. Next drop coming soon.`:st==='live'?`${p.stock} of ${qty} left`:esc(dropWhen(p))}</span>
-    ${clock}
-    <span class="df-meta"><b class="num">${money(p.price)}</b>${value>Number(p.price)?` · ${money(value)}+ value`:''} · ${qty} bags · never restocked</span>
-    <span class="df-go">${st==='live'?'Cop it now':st==='sold'?'See past drops':'See the drop'} →</span>
-   </div></a>`;
+   <div class="df-txt"><span class="df-eye">${st==='live'?'Live now':st==='sold'?'Sold out':st==='early'?esc(tierName(p.early_tier))+' early access':'Next drop'} · ${dropNo(p)}</span><b class="df-name">${esc(p.name)}</b><span class="df-when">${sub}</span></div>
+   ${clock}
+   <span class="df-go">${st==='live'?'Cop it':'View'} →</span></a>`;
 }
 function gcalLink(p){const f=d=>new Date(d).toISOString().replace(/[-:]|\.\d{3}/g,'');const e=new Date(dropT(p)+30*60e3);return`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Cargo Drop '+dropNo(p)+' · '+p.name)}&dates=${f(p.drop_at)}/${f(e)}&details=${encodeURIComponent(location.origin+'/#drop')}`}
 let dropTick=null,dropPoll=null;

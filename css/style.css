@@ -614,28 +614,18 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .dr-past .mono{color:var(--yellow);font-size:13px}.dr-past small{color:var(--muted)}
 @media(max-width:760px){.dr-main{grid-template-columns:minmax(0,1fr);gap:20px}.dr-art{max-width:420px;width:100%;margin:0 auto}.dr-cd div{min-width:0;flex:1}.dr-cd b{font-size:30px}}
 
-/* ---------- home: next drop feature (replaces 420 counter) ---------- */
-.dropfeat{--acc:var(--yellow);display:grid;grid-template-columns:150px minmax(0,1fr);gap:20px;align-items:center;width:100%;max-width:720px;box-sizing:border-box;margin:22px auto 0;padding:16px;text-decoration:none;color:var(--text);text-align:left;background:#000;border:2px solid var(--acc);border-radius:14px;box-shadow:6px 6px 0 var(--acc)}
-.dropfeat.spooky{--acc:#ff7a1a;background:radial-gradient(120% 140% at 100% 0,rgba(255,122,26,.18),transparent 60%),#000}
+/* ---------- home: next drop strip (compact) ---------- */
+.dropfeat{--acc:var(--yellow);display:grid;grid-template-columns:52px minmax(0,1fr) auto auto;gap:14px;align-items:center;width:100%;max-width:720px;box-sizing:border-box;margin:18px auto 0;padding:8px 10px;text-decoration:none;color:var(--text);text-align:left;background:#000;border:2px solid var(--acc);border-radius:12px}
 .dropfeat.live{--acc:var(--green);animation:drglow 1.6s ease-in-out infinite}
-.dropfeat.sold{--acc:var(--line);box-shadow:none}
-.df-art{aspect-ratio:1;border-radius:10px;overflow:hidden;background:#111}
+.dropfeat.sold{--acc:var(--line)}
+.df-art{width:52px;height:52px;border-radius:8px;overflow:hidden;background:#111}
 .df-art img,.df-art svg{width:100%;height:100%;object-fit:cover;display:block}
-.dropfeat.spooky .df-art svg path:first-of-type{fill:#ff7a1a}
-.dropfeat.spooky .df-art svg path:nth-of-type(2){stroke:#ff7a1a}
-.df-body{display:grid;gap:6px;min-width:0}
-.df-eye{font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--acc)}
-.df-name{font-family:var(--f-display);font-weight:400;font-size:clamp(30px,5vw,44px);line-height:1;text-transform:uppercase}
-.df-when{font-size:14px;color:var(--muted)}
-.df-cd{display:flex;gap:8px;margin:4px 0}
-.df-cd div{flex:1;max-width:84px;display:grid;text-align:center;border:1px solid var(--line);border-radius:8px;padding:6px 4px;background:var(--panel)}
-.df-cd b{font-size:26px;line-height:1.1;color:var(--acc)}
-.df-cd small{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-.df-meta{font-size:13px;color:var(--muted)}.df-meta b{color:var(--text);font-size:15px}
-.df-go{justify-self:start;margin-top:4px;background:var(--acc);color:#000;font-weight:800;border-radius:8px;padding:9px 14px;font-size:14px}
+.df-txt{display:grid;gap:1px;min-width:0}
+.df-eye{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--acc)}
+.df-name{font-family:var(--f-display);font-weight:400;font-size:22px;line-height:1.05;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.df-when{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.df-cd{font-size:20px;font-weight:600;color:var(--acc);white-space:nowrap}
+.df-cd b{font-weight:600}
+.df-go{background:var(--acc);color:#000;font-weight:800;border-radius:8px;padding:8px 12px;font-size:13px;white-space:nowrap}
 .dropfeat.sold .df-go{background:var(--panel2);color:var(--text)}
-@media(max-width:600px){.dropfeat{grid-template-columns:96px minmax(0,1fr);gap:14px;padding:12px;box-shadow:4px 4px 0 var(--acc)}.df-art{align-self:start}.df-cd b{font-size:22px}.df-go{justify-self:stretch;text-align:center}}
-.drop.spooky .dr-no{color:#ff7a1a}
-.drop.spooky .dr-art svg path:first-of-type{fill:#ff7a1a}
-.drop.spooky .dr-art svg path:nth-of-type(2){stroke:#ff7a1a}
-.drop.spooky .dr-cd b{color:#ff7a1a}
+@media(max-width:600px){.dropfeat{grid-template-columns:44px minmax(0,1fr) auto;gap:10px;padding:8px}.df-art{width:44px;height:44px;grid-row:1/span 2}.df-name{font-size:19px}.df-cd{grid-column:2;grid-row:2;font-size:15px;margin-top:-4px}.df-go{grid-column:3;grid-row:1/span 2;padding:8px 10px}}
