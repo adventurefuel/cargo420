@@ -38,6 +38,7 @@ const catName=id=>(CATS.find(c=>c.id===id)||{name:id}).name;
 /* fallback product art when no photo has been uploaded */
 function art(p){
   if(p.image_url)return `<img src="${esc(p.image_url)}" alt="${esc(p.name)}" loading="lazy">`;
+  if(p.cat==='drop')return `<svg viewBox="0 0 200 200" aria-hidden="true"><rect width="200" height="200" fill="#111"/><path d="M52 72h96l10 104H42z" fill="#f7c31b" stroke="#000" stroke-width="3"/><path d="M76 72c0-20 10-32 24-32s24 12 24 32" fill="none" stroke="#f7c31b" stroke-width="8"/><text x="100" y="146" text-anchor="middle" font-family="Anton,Impact,sans-serif" font-size="58" fill="#000">?</text></svg>`;
   const r=rng(hash(p.id)); const h=Math.floor(r()*360);
   const c1=`hsl(${h} 60% 50%)`, c2=`hsl(${(h+40)%360} 70% 60%)`;
   if(p.cat==='flower'){

@@ -6,7 +6,7 @@ const ago=ts=>{const m=Math.round((Date.now()-new Date(ts))/60000);if(m<1)return
 const tierName=id=>(A.tiers.find(t=>t.id===id)||{name:id}).name;
 const drvName=id=>(A.drivers.find(d=>d.id===id)||{}).name||'';
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-let tab='orders',ordFilter='active',custQ='',invQ='',flashIds=new Set(),user=null,channel=null;
+let custQuiet=false,tab='orders',ordFilter='active',custQ='',invQ='',flashIds=new Set(),user=null,channel=null;
 const V=()=>$('#view');
 
 /* ---------- service worker + push ---------- */
@@ -99,9 +99,10 @@ async function reloadData(){
     sb.from('store_settings').select('*').eq('id',1).single(),
     sb.from('tiers').select('*').order('sort'),
     sb.from('events').select('*').order('starts_on'),
-    sb.from('zip_codes').select('*').order('zip')]);
+    sb.from('zip_codes').select('*').order('zip'),
+    sb.from('promo_settings').select('*').eq('id',1).single()]);
   const bad=res.find(x=>x.error);if(bad)throw bad.error;
-  [A.orders,A.customers,A.drivers,A.members,A.products,A.zones,A.settings,A.tiers,A.events,A.zips]=res.map(x=>x.data);
+  [A.orders,A.customers,A.drivers,A.members,A.products,A.zones,A.settings,A.tiers,A.events,A.zips,A.promo]=res.map(x=>x.data);
   render();
 }
 function subscribe(){
@@ -136,8 +137,9 @@ async function render(){
   const today=A.orders.filter(o=>isToday(o.created_at)&&o.status!=='cancelled');
   const sales=today.filter(o=>o.status==='delivered').reduce((s,o)=>s+Number(o.collected??o.total),0);
   const street=A.orders.filter(o=>o.status==='out').reduce((s,o)=>s+Number(o.total),0)+A.orders.filter(o=>o.status==='delivered'&&!o.cash_in).reduce((s,o)=>s+Number(o.collected??o.total),0);
-  const nNew=A.orders.filter(o=>o.status==='new').length,pend=A.members.filter(m=>m.status==='pending').length,low=A.products.filter(p=>p.active&&p.stock<=3).length;
-  const tabs=[['orders','Orders',nNew],['customers','Customers'],['drivers','Drivers & cash'],['inventory','Inventory',low],['members','Members',pend],['events','Events'],['reports','Reports'],['settings','Settings']];
+  const nNew=A.orders.filter(o=>o.status==='new').length,pend=A.members.filter(m=>m.status==='pending').length,low=A.products.filter(p=>p.active&&p.cat!=='drop'&&p.stock<=3).length;
+  const liveDrop=A.products.some(p=>p.cat==='drop'&&p.active&&p.stock>0&&p.drop_at&&new Date(p.drop_at)<=new Date())?'LIVE':0;
+  const tabs=[['orders','Orders',nNew],['customers','Customers'],['drivers','Drivers & cash'],['inventory','Inventory',low],['drops','Drops',liveDrop],['members','Members',pend],['events','Events'],['reports','Reports'],['settings','Settings']];
   const ps=await pushState();
   const focus=document.activeElement?.id;
   V().innerHTML=`<div class="wrap adm">
@@ -153,7 +155,7 @@ async function render(){
    </div>
    <div class="tabs" role="tablist">${tabs.map(([id,l,b])=>`<button role="tab" class="${tab===id?'on':''}" data-tab="${id}">${l}${b?`<span class="b">${b}</span>`:''}</button>`).join('')}</div>
    <div id="admbody"></div></div>`;
-  ({orders:aOrders,customers:aCustomers,drivers:aDrivers,inventory:aInventory,members:aMembers,events:aEvents,reports:aReports,settings:aSettings}[tab])($('#admbody'));
+  ({orders:aOrders,customers:aCustomers,drivers:aDrivers,inventory:aInventory,drops:aDrops,members:aMembers,events:aEvents,reports:aReports,settings:aSettings}[tab])($('#admbody'));
   if(focus&&$('#'+focus)){const el=$('#'+focus);el.focus();if(el.setSelectionRange&&typeof el.value==='string')try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}
 }
 function alertCard(ps){
@@ -173,7 +175,7 @@ function aOrders(B){
   B.innerHTML=`<div style="display:grid;gap:12px"><div class="filters">${fs.map(([id,l])=>`<button class="${ordFilter===id?'on':''}" data-of="${id}">${l} <span class="num">${A.orders.filter(o=>match(o,id)).length}</span></button>`).join('')}</div>
   <div class="olist">${list.map(o=>{const c=A.customers.find(c=>c.id===o.customer_id);return`<article class="order s-${o.status} ${flashIds.has(o.id)?'flash':''}">
    <div><div class="row"><span class="id">${esc(o.code)}</span><span class="pill p-${o.status}">${SL[o.status]}</span></div><div class="meta">${new Date(o.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})} · ${ago(o.created_at)}</div>
-    <div style="margin-top:6px;font-weight:600">${esc(o.cust_name)} ${o.tier?`<span class="pill p-muted">${esc(tierName(o.tier))}</span>`:''}</div><div class="meta"><a href="tel:${esc(o.cust_phone.replace(/\D/g,''))}">${esc(o.cust_phone)}</a></div>
+    <div style="margin-top:6px;font-weight:600">${esc(o.cust_name)} ${o.tier?`<span class="pill p-muted">${esc(tierName(o.tier))}</span>`:''}${Number(o.free_win)?`<span class="pill p-new">420 WINNER −${money(o.free_win)}</span>`:''}${o.ref_code?`<span class="pill p-muted">Referred · ${esc(o.ref_code)}</span>`:''}${Number(o.credit_used)?`<span class="pill p-muted">Credit −${money(o.credit_used)}</span>`:''}</div><div class="meta"><a href="tel:${esc(o.cust_phone.replace(/\D/g,''))}">${esc(o.cust_phone)}</a></div>
     ${c&&!c.id_verified?'<div class="meta" style="color:var(--warn)">ID not yet verified</div>':''}</div>
    <div><div class="meta">${esc(o.address)}, ${esc(o.city)} · <a href="https://maps.google.com/?q=${encodeURIComponent(o.address+', '+o.city+', MI')}" target="_blank" rel="noopener">Map</a></div>${o.notes?`<div class="meta" style="color:var(--yellow)">Note: ${esc(o.notes)}</div>`:''}
     <div class="items" style="margin-top:6px">${o.items.map(i=>`${i.qty}× ${esc(i.name)}`).join(' · ')}</div></div>
@@ -191,11 +193,17 @@ function aOrders(B){
 function aCustomers(B){
   const stats={};A.orders.forEach(o=>{if(o.status==='cancelled'||!o.customer_id)return;const s=stats[o.customer_id]||(stats[o.customer_id]={n:0,spent:0,last:null});s.n++;s.spent+=Number(o.total);if(!s.last||o.created_at>s.last)s.last=o.created_at});
   let list=A.customers.map(c=>({...c,...(stats[c.id]||{n:0,spent:0,last:null}),m:A.members.find(m=>m.phone===c.phone&&m.status==='active')}));
-  if(custQ)list=list.filter(c=>[c.name,c.phone,c.city,c.address].join(' ').toLowerCase().includes(custQ.toLowerCase()));
-  B.innerHTML=`<div style="display:grid;gap:12px"><div class="row" style="justify-content:space-between"><input id="custq" placeholder="Search name, phone, city" value="${esc(custQ)}" style="max-width:320px"><span class="note">${list.length} customers · order stats cover the last 90 days</span></div>
-  <div class="tblwrap"><table><thead><tr><th>Customer</th><th>Phone</th><th>Address</th><th class="r">Orders</th><th class="r">Spent</th><th>Last order</th><th>Membership</th><th>ID verified</th><th>Notes</th></tr></thead><tbody>
+  if(custQ)list=list.filter(c=>[c.name,c.phone,c.city,c.address,c.ref_code||''].join(' ').toLowerCase().includes(custQ.toLowerCase()));
+  const quietCut=Date.now()-21*864e5,isQuiet=c=>c.last&&new Date(c.last).getTime()<quietCut;
+  const quietN=list.filter(isQuiet).length;
+  if(custQuiet)list=list.filter(isQuiet).sort((a,b)=>new Date(a.last)-new Date(b.last));
+  const refs={};A.customers.forEach(c=>{if(c.referred_by)refs[c.referred_by]=(refs[c.referred_by]||0)+1});
+  B.innerHTML=`<div style="display:grid;gap:12px"><div class="row" style="justify-content:space-between"><input id="custq" placeholder="Search name, phone, city" value="${esc(custQ)}" style="max-width:320px"><div class="filters"><button class="${custQuiet?'':'on'}" data-quiet="0">All</button><button class="${custQuiet?'on':''}" data-quiet="1">Quiet 21+ days <span class="num">${quietN}</span></button></div><span class="note">${list.length} customers · order stats cover the last 90 days</span></div>
+  ${custQuiet?`<div class="install"><b>Win them back</b><span class="note">Text each person yourself, one at a time, from your own phone. Tap a number to call, or copy this message:</span><div class="row"><span class="mono" style="font-size:13px" id="wbmsg">Hey, it's Cargo+420! Haven't seen you in a minute. Happy Hour is Mon–Thu 11am–3pm with a $25 minimum in Detroit. cargo420.onrender.com</span><button class="btn sm" id="copywb">Copy message</button></div></div>`:''}
+  <div class="tblwrap"><table><thead><tr><th>Customer</th><th>Phone</th><th>Address</th><th class="r">Orders</th><th class="r">Spent</th><th>Last order</th><th>Membership</th><th>Referral code</th><th class="r">Credit</th><th class="r">Referred</th><th>ID verified</th><th>Notes</th></tr></thead><tbody>
   ${list.map(c=>`<tr><td><b>${esc(c.name)}</b></td><td class="mono"><a href="tel:${esc(c.phone.replace(/\D/g,''))}">${esc(c.phone)}</a></td><td>${esc(c.address||'')}${c.city?', '+esc(c.city):''}</td><td class="r num">${c.n}</td><td class="r num">${money(c.spent)}</td><td>${c.last?ago(c.last):'—'}</td>
    <td>${c.m?`<span class="pill p-new">${esc(tierName(c.m.tier))}</span>`:'<span class="note">—</span>'}</td>
+   <td class="mono">${esc(c.ref_code||'')}</td><td class="r num">${Number(c.credit)?money(c.credit):'—'}</td><td class="r num">${refs[c.id]||0}</td>
    <td><label class="toggle"><input type="checkbox" data-idv="${c.id}" ${c.id_verified?'checked':''}> ${c.id_verified?'Yes':'No'}</label></td>
    <td><input data-cnote="${c.id}" value="${esc(c.notes||'')}" placeholder="Add note" style="min-width:200px"></td></tr>`).join('')||'<tr><td colspan="9" class="note">Customers appear here after their first order.</td></tr>'}</tbody></table></div></div>`;
 }
@@ -217,7 +225,7 @@ function aDrivers(B){
 /* ---------- inventory ---------- */
 let editing=null;
 function aInventory(B){
-  let list=A.products.slice().sort((a,b)=>(b.active-a.active)||a.stock-b.stock||a.name.localeCompare(b.name));
+  let list=A.products.filter(p=>p.cat!=='drop').sort((a,b)=>(b.active-a.active)||a.stock-b.stock||a.name.localeCompare(b.name));
   if(invQ)list=list.filter(p=>(p.name+' '+catName(p.cat)).toLowerCase().includes(invQ.toLowerCase()));
   B.innerHTML=`<div style="display:grid;gap:12px">
    <div class="row" style="justify-content:space-between"><input id="invq" placeholder="Search products" value="${esc(invQ)}" style="max-width:280px"><button class="btn sm" data-edit="new">Add product</button></div>
@@ -266,6 +274,59 @@ async function saveProduct(){
     toast('Product saved','It shows on the store right away.',true);editing=null;render();
   }catch(e){toast('Product not saved',errMsg(e));btn.disabled=false;btn.textContent='Save product'}
 }
+/* ---------- cargo drops ---------- */
+let dEditing=null;
+const dNo=p=>'#'+String(p.drop_no||0).padStart(3,'0');
+function dStatus(p){const now=Date.now(),t=p.drop_at?new Date(p.drop_at).getTime():0;if(!p.active)return['Hidden','p-muted'];if(p.stock<=0)return['Sold out','p-cancelled'];if(t&&now>=t)return['Live','p-delivered'];if(t&&p.early_tier&&p.early_minutes&&now>=t-p.early_minutes*60e3)return['Early access','p-out'];return['Scheduled','p-new']}
+function dSellTime(p){if(!p.sold_out_at||!p.drop_at)return'—';const s=Math.max(0,Math.round((new Date(p.sold_out_at)-new Date(p.drop_at))/1e3));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h?`${h}h ${m}m`:m?`${m}m ${x}s`:`${x}s`}
+function dropOrders(id){return A.orders.filter(o=>o.status!=='cancelled'&&o.items.some(i=>i.id===id))}
+function aDrops(B){
+  const list=A.products.filter(p=>p.cat==='drop').sort((a,b)=>(b.drop_no||0)-(a.drop_no||0));
+  B.innerHTML=`<div style="display:grid;gap:14px">
+   <div class="row" style="justify-content:space-between"><p class="note" style="margin:0;max-width:640px">A Cargo Drop is a numbered mystery bag with a fixed number of units and a release time. It stays hidden from the shop, counts down on the Drop page and the home page, then sells until it hits zero. Limit per customer is checked by phone number.</p><button class="btn sm" data-dedit="new">New drop</button></div>
+   <div id="dformwrap"></div>
+   <div class="tblwrap"><table><thead><tr><th>Drop</th><th>Name</th><th>Release</th><th class="r">Price</th><th class="r">Sold</th><th>Sold out in</th><th>Status</th><th></th></tr></thead><tbody>
+   ${list.map(p=>{const [l,c]=dStatus(p),q=p.drop_qty||0,sold=Math.max(0,q-p.stock);return`<tr><td class="mono"><b>${dNo(p)}</b></td><td><b>${esc(p.name)}</b></td><td>${p.drop_at?new Date(p.drop_at).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'—'}</td><td class="r num">${money(p.price)}</td><td class="r num">${sold} / ${q}</td><td class="num">${dSellTime(p)}</td><td><span class="pill ${c}">${l}</span></td><td><button class="linkbtn" data-dedit="${p.id}">Edit</button></td></tr>`}).join('')||'<tr><td colspan="8" class="note">No drops yet. Create Drop #001.</td></tr>'}
+   </tbody></table></div></div>`;
+  if(dEditing)drawDForm();
+}
+function localDT(iso){if(!iso)return'';const d=new Date(iso);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)}
+function drawDForm(){
+  const w=$('#dformwrap');if(!w)return;
+  const next=Math.max(0,...A.products.filter(p=>p.cat==='drop').map(p=>p.drop_no||0))+1;
+  const p=dEditing==='new'?{name:'Mystery Bag',price:50,drop_value:80,drop_qty:25,stock:25,drop_no:next,drop_limit:1,early_tier:(A.tiers.find(t=>/black/i.test(t.name))||A.tiers[A.tiers.length-1]||{}).id||'',early_minutes:15,drop_at:null,description:'',active:true,image_url:null}:A.products.find(x=>x.id===dEditing);
+  if(!p){dEditing=null;return}
+  const sold=dEditing==='new'?0:Math.max(0,(p.drop_qty||0)-p.stock);
+  w.innerHTML=`<form class="pform" id="dform"><div class="row" style="justify-content:space-between"><h3 style="font-size:24px">${dEditing==='new'?'New Cargo Drop':'Edit drop '+dNo(p)}</h3><button type="button" class="x" data-dedit="" aria-label="Close">×</button></div>
+   <div class="three"><label>Drop number<input id="df-no" type="number" min="1" value="${p.drop_no||next}"></label><label>Name<input id="df-name" required value="${esc(p.name)}" placeholder="Mystery Bag"></label><label>Release (your local time)<input id="df-at" type="datetime-local" required value="${localDT(p.drop_at)}"></label></div>
+   <div class="three"><label>Price ($)<input id="df-price" type="number" step="0.01" min="0" value="${Number(p.price)}"></label><label>Value shown ($)<input id="df-value" type="number" step="0.01" min="0" value="${Number(p.drop_value||0)}"></label><label>Total units<input id="df-qty" type="number" min="1" value="${p.drop_qty||p.stock}"></label></div>
+   <div class="three"><label>Limit per customer<input id="df-limit" type="number" min="1" value="${p.drop_limit||1}"></label><label>Early access tier<select id="df-tier"><option value="">None</option>${A.tiers.map(t=>`<option value="${t.id}" ${p.early_tier===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label><label>Early access (minutes before)<input id="df-early" type="number" min="0" value="${p.early_minutes||0}"></label></div>
+   <label>Teaser / what's inside<textarea id="df-desc" rows="2" placeholder="An eighth of top shelf, 2 pre-rolls, a 100mg edible and one surprise. Value $80+.">${esc(p.description||'')}</textarea></label>
+   <div class="row"><div class="thumb" style="width:72px;height:72px">${art({...p,id:p.id||'new',cat:'drop'})}</div><label style="flex:1">Photo (optional; a mystery-bag graphic shows if blank)<input id="df-photo" type="file" accept="image/jpeg,image/png,image/webp"></label></div>
+   ${sold?`<p class="note" style="margin:0">${sold} already sold. Changing total units keeps the sold count and adjusts what's left.</p>`:''}
+   <div class="row"><label class="toggle"><input type="checkbox" id="df-active" ${p.active?'checked':''}> Show on the site</label></div>
+   <div class="row"><button class="btn" id="df-save">Save drop</button>${dEditing!=='new'?`<button type="button" class="btn ghost sm" data-dnow="${p.id}">Release now</button>${sold?'':`<button type="button" class="btn red sm" data-pdel="${p.id}">Delete drop</button><span id="pdel-c" hidden><button type="button" class="btn red sm" data-pdelyes="${p.id}">Yes, delete it</button></span>`}`:''}</div></form>`;
+}
+async function saveDrop(){
+  const btn=$('#df-save');btn.disabled=true;btn.textContent='Saving…';
+  const at=$('#df-at').value,qty=Math.max(1,parseInt($('#df-qty').value)||1);
+  const old=dEditing==='new'?null:A.products.find(x=>x.id===dEditing);const sold=old?Math.max(0,(old.drop_qty||0)-old.stock):0;
+  const rec={cat:'drop',name:$('#df-name').value.trim()||'Mystery Bag',drop_no:parseInt($('#df-no').value)||1,drop_at:at?new Date(at).toISOString():null,price:Math.max(0,+$('#df-price').value||0),drop_value:Math.max(0,+$('#df-value').value||0)||null,
+    drop_qty:qty,stock:Math.max(0,qty-sold),drop_limit:Math.max(1,parseInt($('#df-limit').value)||1),early_tier:$('#df-tier').value||null,early_minutes:Math.max(0,parseInt($('#df-early').value)||0),description:$('#df-desc').value.trim()||null,active:$('#df-active').checked,tags:[],featured:false,options:null,size:'Mystery bag'};
+  if(rec.stock>0)rec.sold_out_at=null;
+  if(!rec.drop_at){toast('Pick a release time','',true);btn.disabled=false;btn.textContent='Save drop';return}
+  const file=$('#df-photo').files[0];
+  try{
+    if(file){if(file.size>5*1024*1024)throw new Error('That photo is over 5 MB. Pick a smaller one.');
+      const path=`drops/${Date.now()}-${file.name.replace(/[^\w.-]+/g,'_')}`;
+      const up=await sb.storage.from('products').upload(path,file,{cacheControl:'31536000',contentType:file.type});if(up.error)throw up.error;
+      rec.image_url=sb.storage.from('products').getPublicUrl(path).data.publicUrl;}
+    if(dEditing==='new'){const {data,error}=await sb.from('products').insert(rec).select().single();if(error)throw error;A.products.push(data)}
+    else{const d=await upd('products',dEditing,rec);if(!d)throw new Error('Not saved')}
+    toast(`Drop ${dNo(rec)} saved`,'The countdown is live on the Drop page.',true);dEditing=null;render();
+  }catch(e){toast('Drop not saved',errMsg(e));btn.disabled=false;btn.textContent='Save drop'}
+}
+
 /* ---------- members ---------- */
 const plusDays=(d,n)=>{const x=d?new Date(d+'T12:00'):new Date();const base=x<new Date()?new Date():x;base.setDate(base.getDate()+n);return base.toISOString().slice(0,10)};
 function aMembers(B){
@@ -319,6 +380,8 @@ function aSettings(B){
    <label>Re-delivery fee wording<input id="s-redel" value="${esc(A.settings.redeliver)}"></label>
    <h2 style="font-size:26px;margin-top:10px">Delivery zones</h2><p class="note" style="margin:0">If an order is under the zone minimum, the fee is added. Cities are comma separated and show in the checkout city list.</p>
    ${A.zones.map(z=>`<div class="pform"><div class="two"><label>Zone minimum ($)<input type="number" min="0" data-zmin="${z.id}" value="${Number(z.min_order)}"></label><label>Fee if under minimum ($)<input type="number" min="0" data-zfee="${z.id}" value="${Number(z.fee)}"></label></div><label>Cities<textarea rows="2" data-zcities="${z.id}">${esc(z.cities.join(', '))}</textarea></label></div>`).join('')}
+   <h2 style="font-size:26px;margin-top:10px">Referrals &amp; 420 free order</h2>
+   <div class="pform"><div class="three"><label>New customer gets ($ off first order)<input id="s-refnew" type="number" min="0" value="${Number(A.promo?.ref_new??10)}"></label><label>Referrer earns ($ credit after delivery)<input id="s-refrew" type="number" min="0" value="${Number(A.promo?.ref_reward??10)}"></label><label>420 free order cap ($)<input id="s-wincap" type="number" min="0" value="${Number(A.promo?.win_cap??100)}"></label></div><p class="note" style="margin:0">Every order number ending in 420 (1420, 2420, …) is free up to the cap.</p></div>
    <h2 style="font-size:26px;margin-top:10px">ZIP codes</h2><p class="note" style="margin:0">Powers the “Do we deliver to you?” checker. One per line: ZIP, then the city exactly as it's written in a zone above.</p>
    <label class="sr" for="s-zips">ZIP codes</label><textarea id="s-zips" rows="8" class="mono" style="font-size:13px">${esc(A.zips.map(z=>z.zip+' '+z.city).join('\n'))}</textarea>
    <h2 style="font-size:26px;margin-top:10px">Membership tiers</h2>
@@ -337,6 +400,7 @@ async function saveSettings(){
     if(gone.length){r=await sb.from('zip_codes').delete().in('zip',gone);if(r.error)throw r.error}
     const up=[...want].filter(([zip,city])=>!A.zips.some(z=>z.zip===zip&&z.city===city)).map(([zip,city])=>({zip,city}));
     if(up.length){r=await sb.from('zip_codes').upsert(up,{onConflict:'zip'});if(r.error)throw r.error}
+    r=await sb.from('promo_settings').update({ref_new:Math.max(0,+$('#s-refnew').value||0),ref_reward:Math.max(0,+$('#s-refrew').value||0),win_cap:Math.max(0,+$('#s-wincap').value||0)}).eq('id',1);if(r.error)throw r.error;
     for(const t of A.tiers){r=await sb.from('tiers').update({price:+$(`[data-tprice="${t.id}"]`).value||0,pct_off:Math.min(90,Math.max(0,parseInt($(`[data-tpct="${t.id}"]`).value)||0)),waive_fee:$(`[data-twaive="${t.id}"]`).checked,perks:$(`[data-tperks="${t.id}"]`).value.split('\n').map(s=>s.trim()).filter(Boolean)}).eq('id',t.id);if(r.error)throw r.error}
     toast('Settings saved','The store uses them right away.',true);await reloadData();
   }catch(e){toast('Settings not saved',errMsg(e))}
@@ -350,6 +414,8 @@ document.addEventListener('click',async e=>{
   if(t.id==='signout'){await sb.auth.signOut();location.reload();return}
   if(t.dataset.tab){tab=t.dataset.tab;history.replaceState(null,'','#'+tab);render();return}
   if(t.dataset.of){ordFilter=t.dataset.of;render();return}
+  if(t.dataset.quiet!==undefined){custQuiet=t.dataset.quiet==='1';render();return}
+  if(t.id==='copywb'){navigator.clipboard?.writeText($('#wbmsg').textContent).then(()=>toast('Message copied','',true)).catch(()=>{});return}
   if(t.id==='onpush'){enablePush();return}
   if(t.id==='offpush'){disablePush();return}
   if(t.id==='testpush'){testPush();return}
@@ -365,8 +431,10 @@ document.addEventListener('click',async e=>{
     const d=await upd('members',m.id,patch);if(d)toast(act==='approve'?`${d.name} approved`:act==='paid'?`Dues logged for ${d.name}`:'Membership updated',act==='approve'?'Collect the first month in cash on their next delivery.':'',true);render();return}
   if(t.dataset.delev){const {error}=await sb.from('events').delete().eq('id',t.dataset.delev);if(error)return toast('Not removed',errMsg(error));A.events=A.events.filter(x=>x.id!==t.dataset.delev);render();return}
   if(t.dataset.edit!==undefined){editing=t.dataset.edit||null;if(editing){aInventory($('#admbody'));$('#pformwrap').scrollIntoView({behavior:'smooth',block:'start'})}else{const w=$('#pformwrap');if(w)w.innerHTML=''}return}
+  if(t.dataset.dedit!==undefined){dEditing=t.dataset.dedit||null;if(dEditing){aDrops($('#admbody'));$('#dformwrap').scrollIntoView({behavior:'smooth',block:'start'})}else{const w=$('#dformwrap');if(w)w.innerHTML=''}return}
+  if(t.dataset.dnow){const d=await upd('products',t.dataset.dnow,{drop_at:new Date().toISOString(),active:true});if(d)toast(`Drop ${dNo(d)} is live`,'',true);dEditing=null;render();return}
   if(t.dataset.pdel){$('#pdel-c').hidden=false;return}
-  if(t.dataset.pdelyes){const {error}=await sb.from('products').delete().eq('id',t.dataset.pdelyes);if(error)return toast('Not deleted',errMsg(error));A.products=A.products.filter(p=>p.id!==t.dataset.pdelyes);editing=null;render();return}
+  if(t.dataset.pdelyes){const {error}=await sb.from('products').delete().eq('id',t.dataset.pdelyes);if(error)return toast('Not deleted',errMsg(error));A.products=A.products.filter(p=>p.id!==t.dataset.pdelyes);editing=null;dEditing=null;render();return}
   if(t.dataset.csv){downloadCsv(t.dataset.csv);return}
 });
 document.addEventListener('change',async e=>{
@@ -392,6 +460,7 @@ document.addEventListener('submit',async e=>{
     if(!rec.title||!rec.starts_on)return toast('Add a title and date','',true);
     const {data,error}=await sb.from('events').insert(rec).select().single();if(error)return toast('Not saved',errMsg(error));A.events.push(data);A.events.sort((a,b)=>a.starts_on.localeCompare(b.starts_on));toast('Event published','It now shows on the Events page.',true);render();return}
   if(f.id==='pform')return saveProduct();
+  if(f.id==='dform')return saveDrop();
   if(f.id==='setf')return saveSettings();
 });
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&user)reloadData().catch(()=>{})});
@@ -401,7 +470,7 @@ setInterval(()=>{if(user&&tab==='orders'&&!document.activeElement?.matches('inpu
 let booting=false;
 async function boot(){if(booting)return;booting=true;try{await bootInner()}finally{booting=false}}
 async function bootInner(){
-  const h=location.hash.slice(1);if(['orders','customers','drivers','inventory','members','events','reports','settings'].includes(h))tab=h;
+  const h=location.hash.slice(1);if(['orders','customers','drivers','inventory','drops','members','events','reports','settings'].includes(h))tab=h;
   const {data:{session}}=await sb.auth.getSession();
   if(!session){user=null;return vAuth('in')}
   user=session.user;

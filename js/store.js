@@ -2,6 +2,7 @@
 const HOME_CATS=['flower','edibles','cbd','concentrates','mushrooms','vapes','enhance'];
 const D={products:[],zones:[],settings:{},tiers:[],events:[],zips:{}};
 const prod=id=>D.products.find(p=>p.id===id);
+const shopItems=()=>D.products.filter(p=>p.cat!=='drop');
 const choices=p=>p&&p.options&&Array.isArray(p.options.choices)?p.options.choices:null;
 const choiceOf=(p,opt)=>(choices(p)||[]).find(c=>c.label===opt)||null;
 const itemPrice=(p,opt)=>{const c=choiceOf(p,opt);return c?Number(c.price):Number(p.price)};
@@ -23,13 +24,14 @@ async function loadAll(){
   const err=[p,z,s,t,e].find(x=>x.error);if(err)throw err.error;
   D.products=p.data;D.zones=z.data;D.settings=s.data;D.tiers=t.data;D.events=e.data;
   D.zips={};(zz.data||[]).forEach(r=>D.zips[r.zip]=r.city);
+  try{const [ps,nf]=await Promise.all([sb.from('promo_settings').select('*').eq('id',1).single(),sb.rpc('next_free_order')]);D.promo=ps.data||{ref_new:10,ref_reward:10,win_cap:100};D.nextFree=nf.data||null}catch(e){D.promo={ref_new:10,ref_reward:10,win_cap:100};D.nextFree=null}
 }
 
 /* ---------- routing ---------- */
 let route='home',shopFilter={type:'all',val:null},sortBy='newest',q='';
 function go(){
   const h=(location.hash||'#home').slice(1);
-  route=['home','shop','specials','members','events','areas','checkout','done'].includes(h)?h:'home';
+  route=['home','shop','drop','specials','members','events','areas','checkout','done'].includes(h)?h:'home';
   if(CATS.some(c=>c.id===h)){route='shop';shopFilter={type:'cat',val:h}}
   render();window.scrollTo(0,0);
 }
@@ -39,7 +41,8 @@ function render(){
   const b=$('#banner');
   if(!D.settings.open){b.className='banner closed';b.textContent='We are closed right now and not taking orders. Hours: '+D.settings.hours}
   else{b.className='banner';b.textContent=`Cash on delivery only · $${Number(D.settings.base_min)} minimum on every order · Valid 21+ ID checked at delivery · Hours ${D.settings.hours}`}
-  ({home:vHome,shop:vShop,specials:vSpecials,members:vMembers,events:vEvents,areas:vAreas,checkout:vCheckout,done:vDone}[route])($('#view'));
+  stopDropTimers();
+  ({home:vHome,shop:vShop,drop:vDrop,specials:vSpecials,members:vMembers,events:vEvents,areas:vAreas,checkout:vCheckout,done:vDone}[route])($('#view'));
   saveCart();
 }
 
@@ -81,17 +84,21 @@ function vSpecials(V){
     <li><div class="sp-tier">Under $65</div><div><b>Every order</b><span>2 free pre-rolls with your order</span></div></li>
    </ol>
    <p class="note">Pick your free item at checkout.</p>
+   <div style="margin-top:28px">${freeCounter()}</div>
+   <div class="sp-ref"><b>Give $${Number(D.promo.ref_new)}, get $${Number(D.promo.ref_reward)}</b><span>Share your referral code. Your friend gets $${Number(D.promo.ref_new)} off their first order, and you get $${Number(D.promo.ref_reward)} credit once it's delivered. Your code is on your order confirmation.</span></div>
    <a class="btn sp-cta" href="#shop">Shop the menu →</a>
   </section></div>`;
 }
 
+function freeCounter(){const n=D.nextFree;if(!n)return'';return`<div class="fc"><div class="fc-plate"><small>Next free order</small><b>#${esc(n.code)}</b></div><div class="fc-txt"><b>${n.away} order${n.away===1?'':'s'} away</b><span>Every order number ending in 420 ships free, up to $${Number(n.cap)}. Your order could be the one.</span></div></div>`}
 function vHome(V){
   V.innerHTML=`<div class="wrap">
   <section class="hero"><img src="img/logo.webp" alt="Cargo+420 Exclusive Delivery Service"><p>Metro Detroit cannabis delivery. Pick a category, build your order, pay cash at the door.</p>
+   ${dropBanner()}${freeCounter()}
    <button class="zipchip" id="zipchip">${myZip?`${ICONS.pin}<span>Delivering to <b>${esc(myZip.city)} ${esc(myZip.zip)}</b></span><u>Change</u>`:`${ICONS.pin}<span>Do we deliver to you?</span><u>Check your ZIP</u>`}</button></section>
   <nav class="catgrid" aria-label="Shop by category">
    ${HOME_CATS.map(id=>{const c=CATS.find(x=>x.id===id);return`<a class="catbtn" href="#${id}">${ICONS[id]}<span>${c.name}</span><small>${c.blurb}</small></a>`}).join('')}
-   <a class="catbtn all" href="#shop">${ICONS.all}<span>Shop all</span><small>${D.products.length} products</small></a>
+   <a class="catbtn all" href="#shop">${ICONS.all}<span>Shop all</span><small>${shopItems().length} products</small></a>
   </nav>
   <div class="strip">
    <div><b>Cash on delivery</b><p>No cards, no apps. Have cash ready when your driver arrives.</p></div>
@@ -237,9 +244,9 @@ function openFilters(){
    </div><button class="btn" data-close style="margin-top:12px">Show results</button></aside>`;
   $('#sort2').value=sortBy;
 }
-function tagsFor(){const s=new Set();D.products.forEach(p=>p.tags.forEach(t=>s.add(t)));return[...s].sort()}
+function tagsFor(){const s=new Set();shopItems().forEach(p=>(p.tags||[]).forEach(t=>s.add(t)));return[...s].sort()}
 function vShop(V){
-  let list=D.products.slice();
+  let list=shopItems();
   if(shopFilter.type==='cat')list=list.filter(p=>p.cat===shopFilter.val);
   if(shopFilter.type==='tag')list=list.filter(p=>p.tags.includes(shopFilter.val));
   if(shopFilter.type==='feat')list=list.filter(p=>p.featured);
@@ -298,10 +305,11 @@ function openCart(){
 }
 
 /* ---------- checkout ---------- */
+(()=>{try{const r=new URLSearchParams(location.search).get('ref');if(r)store.set('c420ref',r.toUpperCase().slice(0,8))}catch(e){}})();
 let co=store.get('c420co',{name:'',phone:'',address:'',city:'',notes:''});co.age=false;if(!co.city&&store.get('c420zip',null))co.city=store.get('c420zip',null).city;
 let quote=null,placing=false;
 async function refreshQuote(){
-  const {data,error}=await sb.rpc('quote_order',{p_items:cart,p_city:co.city||null,p_phone:co.phone||null});
+  const {data,error}=await sb.rpc('quote_cart',{p_items:cart,p_city:co.city||null,p_phone:co.phone||null,p_ref:co.ref||null});
   quote=error?null:data;drawSummary();
 }
 function vCheckout(V){
@@ -314,6 +322,7 @@ function vCheckout(V){
    <label>City<select id="co-city" required><option value="">Choose your city</option>${allCities().map(c=>`<option ${c===co.city?'selected':''}>${esc(c)}</option>`).join('')}</select></label>
    <div id="co-gift"></div>
    <label>Delivery notes (optional)<textarea id="co-notes" rows="2" maxlength="300" placeholder="Gate code, parking, best way to reach you">${esc(co.notes)}</textarea></label>
+   <label>Referral code (optional)<input id="co-ref" autocomplete="off" maxlength="8" style="text-transform:uppercase;font-family:var(--f-mono);letter-spacing:.12em" placeholder="ABCDE" value="${esc(co.ref||store.get('c420ref','')||'')}"></label>
    <label class="check"><input type="checkbox" id="co-age"> <span>I'm 21 or older and will show a valid government ID to the driver. I'll meet the driver at their vehicle with cash ready.</span></label>
    <div id="co-err" class="warnbox" hidden></div>
    <button class="btn" type="submit" id="co-submit" style="justify-self:start;font-size:17px;padding:12px 24px">Place order</button>
@@ -335,32 +344,108 @@ function drawSummary(){
    <div class="totals"><div><span>Subtotal</span><span class="num">${money(Q.subtotal)}</span></div>
    ${Q.tier?`<div style="color:var(--green)"><span>${esc(Q.tier_name)} member −${Q.pct_off}%</span><span class="num">−${money(Q.discount)}</span></div>`:''}
    <div><span>Delivery${Q.zone_min!=null?` ($${Number(Q.zone_min)} city minimum)`:''}</span><span class="num">${Q.fee?money(Q.fee):(Q.zone_min!=null?'Free':'Pick a city')}</span></div>
+   ${Number(Q.ref_discount)?`<div style="color:var(--green)"><span>Referral discount</span><span class="num">−${money(Q.ref_discount)}</span></div>`:''}
+   ${Number(Q.credit_used)?`<div style="color:var(--green)"><span>Your referral credit</span><span class="num">−${money(Q.credit_used)}</span></div>`:''}
    <div class="grand"><span>Cash due at door</span><span class="num">${money(Q.total)}</span></div></div>
    ${Q.fee&&Q.zone_min!=null?`<p class="note">Add ${money(Q.zone_min-(Q.subtotal-Q.discount))} more to reach your city's $${Number(Q.zone_min)} minimum and skip the fee.</p>`:''}
    ${!Q.tier&&D.tiers.length?`<p class="note">Members save ${Math.min(...D.tiers.map(t=>t.pct_off))}–${Math.max(...D.tiers.map(t=>t.pct_off))}%. Enter the phone on your membership to apply it.</p>`:''}
+   ${Q.ref_error?`<div class="warnbox">${esc(Q.ref_error)}</div>`:''}
    ${Q.errors.length?`<div class="warnbox">${esc(Q.errors[0])}</div>`:''}`;
   const b=$('#co-submit');if(b)b.textContent=`Place order · ${money(Q.total)} cash`;
 }
-function readCo(){const gs=$('#co-giftsel');co={gift:gs?gs.value:'',name:$('#co-name').value.trim(),phone:$('#co-phone').value.trim(),address:$('#co-address').value.trim(),city:$('#co-city').value,notes:$('#co-notes').value.trim(),age:$('#co-age').checked};store.set('c420co',{...co,age:undefined})}
+function readCo(){const gs=$('#co-giftsel');co={ref:($('#co-ref')?.value||'').trim().toUpperCase(),gift:gs?gs.value:'',name:$('#co-name').value.trim(),phone:$('#co-phone').value.trim(),address:$('#co-address').value.trim(),city:$('#co-city').value,notes:$('#co-notes').value.trim(),age:$('#co-age').checked};store.set('c420co',{...co,age:undefined})}
 async function placeOrder(){
   if(placing)return;readCo();const e=$('#co-err');e.hidden=true;
   const miss=[];if(!co.name)miss.push('your name');if(co.phone.replace(/\D/g,'').length<10)miss.push('a 10-digit mobile number');if(!co.address)miss.push('your street address');if(!co.city)miss.push('your city');
   if(miss.length){e.hidden=false;e.textContent='Please add '+miss.join(', ')+'.';return}
   if(!co.age){e.hidden=false;e.textContent='Confirm you are 21+ and will show ID at delivery.';return}
   placing=true;const b=$('#co-submit');b.disabled=true;b.textContent='Placing order…';
-  const {data,error}=await sb.rpc('place_order',{p_items:cart,p_name:co.name,p_phone:co.phone,p_address:co.address,p_city:co.city,p_notes:[co.gift?'FREE: '+co.gift:'',co.notes].filter(Boolean).join(' · '),p_age_ok:co.age});
+  const {data,error}=await sb.rpc('checkout',{p_ref:co.ref||null,p_items:cart,p_name:co.name,p_phone:co.phone,p_address:co.address,p_city:co.city,p_notes:[co.gift?'FREE: '+co.gift:'',co.notes].filter(Boolean).join(' · '),p_age_ok:co.age});
   placing=false;
   if(error){e.hidden=false;e.textContent=errMsg(error);b.disabled=false;refreshQuote();return}
-  store.set('c420last',{...data,name:co.name,phone:co.phone});cart=[];saveCart();
+  store.set('c420last',{...data,name:co.name,phone:co.phone});try{localStorage.removeItem('c420ref')}catch(e){};co.ref='';store.set('c420co',{...co,age:undefined});cart=[];saveCart();
   loadAll().catch(()=>{});location.hash='#done';
 }
 function vDone(V){
   const o=store.get('c420last',null);if(!o){location.hash='#home';return}
-  V.innerHTML=`<div class="wrap page"><span class="eyebrow">Order received</span><h1>Thanks, ${esc(o.name.split(' ')[0])}</h1>
+  const link=o.my_code?`${location.origin}/?ref=${o.my_code}`:'';
+  V.innerHTML=`<div class="wrap page">
+  ${Number(o.free_win)?`<div class="winner"><small>🎉 Order #${esc(o.code)}</small><b>You hit the 420!</b><span>We took ${money(o.free_win)} off this order. Every order number ending in 420 is free, up to $${Number(D.promo?.win_cap||100)}.</span></div>`:''}
+  <span class="eyebrow">Order received</span><h1>Thanks, ${esc(o.name.split(' ')[0])}</h1>
   <p class="lede">Order <b class="mono">${esc(o.code)}</b> is in. We'll call or text ${esc(o.phone)} to confirm, then your driver will send an ETA.</p>
-  <div class="summary" style="max-width:480px"><div class="totals"><div class="grand"><span>Have this cash ready</span><span class="num">${money(o.total)}</span></div></div>
+  <div class="summary" style="max-width:480px">${Number(o.ref_discount)||Number(o.credit_used)?`<p class="note" style="margin:0;color:var(--green)">${Number(o.ref_discount)?`Referral −${money(o.ref_discount)}. `:''}${Number(o.credit_used)?`Credit −${money(o.credit_used)}.`:''}</p>`:''}<div class="totals"><div class="grand"><span>Have this cash ready</span><span class="num">${money(o.total)}</span></div></div>
   <p class="note" style="margin:0">Meet your driver at their vehicle with a valid 21+ ID. Exact change helps.</p></div>
+  ${o.my_code?`<div class="refbox"><div><small>Your referral code</small><b class="mono">${esc(o.my_code)}</b></div><p>Give friends $${Number(o.ref_new||10)} off their first order. You get $${Number(o.ref_reward||10)} credit when it's delivered, applied to your next order automatically.</p><div class="row"><button class="btn" id="copyref" data-link="${esc(link)}">Copy my link</button><span class="note mono" id="reflink">${esc(link)}</span></div></div>`:''}
   <p style="margin-top:22px"><a class="btn ghost" href="#shop" style="text-decoration:none">Back to the menu</a></p></div>`;
+}
+
+/* ---------- cargo drop ---------- */
+const dropT=p=>new Date(p.drop_at).getTime();
+const drops=()=>D.products.filter(p=>p.cat==='drop'&&p.drop_at).sort((a,b)=>dropT(a)-dropT(b));
+function dropState(p,now=Date.now()){
+  if(p.stock<=0)return'sold';
+  if(now>=dropT(p))return'live';
+  if(p.early_tier&&p.early_minutes>0&&now>=dropT(p)-p.early_minutes*60e3)return'early';
+  return'soon';
+}
+function curDrop(){const d=drops();return d.find(p=>p.stock>0)||d[d.length-1]||null}
+const dropNo=p=>'#'+String(p.drop_no||0).padStart(3,'0');
+const tierName=id=>(D.tiers.find(t=>t.id===id)||{name:'Member'}).name;
+function cd(ms){ms=Math.max(0,ms);const s=Math.floor(ms/1e3),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=s%60,z=n=>String(n).padStart(2,'0');return{d,h:z(h),m:z(m),s:z(x)}}
+function sellTime(p){if(!p.sold_out_at)return'';const s=Math.max(0,Math.round((new Date(p.sold_out_at)-dropT(p))/1e3));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h?`${h}h ${m}m`:m?`${m}m ${x}s`:`${x}s`}
+const dropWhen=p=>new Date(p.drop_at).toLocaleString('en-US',{timeZone:'America/Detroit',weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+function dropBanner(){
+  const p=curDrop();if(!p)return'';const st=dropState(p);
+  if(st==='sold'&&Date.now()-dropT(p)>3*864e5)return'';
+  const c=cd(dropT(p)-Date.now());
+  const msg=st==='live'?`<b>LIVE NOW</b><span>${p.stock} left · ${money(p.price)}</span>`:st==='early'?`<b>${esc(tierName(p.early_tier))} early access is open</b><span>Public release in <i data-cd>${c.h}:${c.m}:${c.s}</i></span>`:st==='sold'?`<b>Sold out${p.sold_out_at?' in '+sellTime(p):''}</b><span>Next drop coming soon</span>`:`<b data-cd>${c.d?c.d+'d ':''}${c.h}:${c.m}:${c.s}</b><span>${esc(dropWhen(p))}</span>`;
+  return`<a class="dropban ${st}" href="#drop"><span class="db-no">Cargo Drop ${dropNo(p)}</span><span class="db-msg">${msg}</span><span class="db-go">${st==='live'?'Cop it':'View drop'} →</span></a>`;
+}
+function gcalLink(p){const f=d=>new Date(d).toISOString().replace(/[-:]|\.\d{3}/g,'');const e=new Date(dropT(p)+30*60e3);return`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Cargo Drop '+dropNo(p)+' · '+p.name)}&dates=${f(p.drop_at)}/${f(e)}&details=${encodeURIComponent(location.origin+'/#drop')}`}
+let dropTick=null,dropPoll=null;
+function stopDropTimers(){clearInterval(dropTick);clearInterval(dropPoll);dropTick=dropPoll=null}
+function vDrop(V){
+  const p=curDrop();
+  if(!p){V.innerHTML=`<div class="wrap page drop"><span class="eyebrow">Cargo Drop</span><h1>No drop scheduled</h1><p class="lede">Limited mystery bags, numbered, never restocked. The next one gets announced here first.</p><p><a class="btn ghost" href="#shop" style="text-decoration:none">Shop the menu</a></p></div>`;return}
+  V.innerHTML=`<div class="wrap page drop" id="dropwrap"></div>`;drawDrop(p);
+  dropTick=setInterval(()=>{const q=curDrop();if(q)drawDrop(q,true)},1000);
+  dropPoll=setInterval(pollDrop,8000);
+}
+async function pollDrop(){const p=curDrop();if(!p)return;const {data}=await sb.from('products').select('id,stock,sold_out_at,drop_at,price,active').eq('id',p.id).single();if(data){Object.assign(p,data);drawDrop(p)}}
+function drawDrop(p,tickOnly){
+  const st=dropState(p),c=cd(dropT(p)-Date.now()),qty=Math.max(1,p.drop_qty||p.stock||1),left=Math.max(0,p.stock),pct=Math.round(left/qty*100);
+  const W=$('#dropwrap');if(!W)return;
+  if(tickOnly&&W.dataset.st===st){W.querySelectorAll('[data-u]').forEach(e=>e.textContent=c[e.dataset.u]);const dd=W.querySelector('[data-d]');if(dd)dd.textContent=c.d;return}
+  W.dataset.st=st;
+  const past=drops().filter(x=>x!==p&&x.stock<=0).reverse().slice(0,6);
+  const value=Number(p.drop_value||0);
+  W.innerHTML=`
+  <div class="dr-head"><span class="dr-no">Cargo Drop ${dropNo(p)}</span><span class="dr-st ${st}">${{soon:'Dropping soon',early:'Early access',live:'Live now',sold:'Sold out'}[st]}</span></div>
+  <div class="dr-main">
+   <div class="dr-art">${p.image_url?art(p):dropArt(p)}${st==='sold'?'<span class="dr-stamp">Sold out</span>':''}</div>
+   <div class="dr-info">
+    <h1>${esc(p.name)}</h1>
+    <div class="dr-price"><b class="num">${money(p.price)}</b>${value>Number(p.price)?`<span>${money(value)}+ value</span>`:''}</div>
+    ${p.description?`<p class="dr-desc">${esc(p.description)}</p>`:''}
+    ${st==='soon'||st==='early'?`<div class="dr-cd" aria-label="Countdown">${c.d?`<div><b class="num" data-d>${c.d}</b><small>days</small></div>`:''}<div><b class="num" data-u="h">${c.h}</b><small>hrs</small></div><div><b class="num" data-u="m">${c.m}</b><small>min</small></div><div><b class="num" data-u="s">${c.s}</b><small>sec</small></div></div>
+     <p class="note">Drops ${esc(dropWhen(p))} · Metro Detroit time</p>`:''}
+    <div class="dr-bar"><div class="dr-fill" style="width:${st==='soon'||st==='early'?100:pct}%"></div></div>
+    <div class="dr-left num">${st==='sold'?`0 / ${qty} left${p.sold_out_at?` · gone in ${sellTime(p)}`:''}`:st==='live'?`${left} / ${qty} left`:`${qty} bags · never restocked`}</div>
+    ${st==='live'?`<button class="btn dr-cop" id="copit" data-cop="${p.id}">Cop it · ${money(p.price)}</button>`
+     :st==='early'?`<div class="dr-early"><b>${esc(tierName(p.early_tier))} members: you're in.</b> Early access is open now. Use the phone number on your membership at checkout.</div><button class="btn dr-cop" id="copit" data-cop="${p.id}">Cop it early · ${money(p.price)}</button>`
+     :st==='soon'?`<a class="btn ghost dr-cal" href="${gcalLink(p)}" target="_blank" rel="noopener">Add a reminder to my calendar</a>${p.early_tier&&p.early_minutes?`<p class="note">${esc(tierName(p.early_tier))} members get in ${p.early_minutes} minutes early. <a href="#members">See membership</a>.</p>`:''}`
+     :`<a class="btn ghost" href="#shop" style="text-decoration:none">Shop the menu</a>`}
+    <ul class="dr-rules"><li>Limit ${p.drop_limit||1} per customer, by phone number</li><li>Cash on delivery, ${money(D.settings.base_min||0)} minimum still applies</li><li>Numbered and never restocked</li><li>Referral card in every bag</li></ul>
+   </div>
+  </div>
+  ${past.length?`<h2 class="dr-past-h">Past drops</h2><div class="dr-past">${past.map(x=>`<div><span class="mono">${dropNo(x)}</span><b>${esc(x.name)}</b><small>${x.sold_out_at?'Sold out in '+sellTime(x):'Sold out'}</small></div>`).join('')}</div>`:''}`;
+}
+function dropArt(p){return`<svg viewBox="0 0 200 200" aria-hidden="true"><rect width="200" height="200" fill="#111"/><path d="M52 72h96l10 104H42z" fill="#f7c31b" stroke="#000" stroke-width="3"/><path d="M76 72c0-20 10-32 24-32s24 12 24 32" fill="none" stroke="#f7c31b" stroke-width="8"/><text x="100" y="138" text-anchor="middle" font-family="Anton,Impact,sans-serif" font-size="54" fill="#000">?</text><text x="100" y="166" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="13" font-weight="600" fill="#000">DROP ${dropNo(p)}</text></svg>`}
+async function copIt(id){
+  const b=$('#copit');if(b){b.disabled=true;b.textContent='Checking…'}
+  await pollDrop();const p=prod(id);
+  if(!p||p.stock<=0){toast('Sold out','Every bag is gone. Watch for the next drop.',true);drawDrop(p);return}
+  cart=cart.filter(x=>x.id!==id);cart.push({id,qty:1});saveCart();location.hash='#checkout';
 }
 
 /* ---------- membership ---------- */
@@ -416,11 +501,13 @@ document.addEventListener('click',e=>{
   if(t.dataset.mq){const el=$('#mq');el.textContent=Math.max(1,+el.textContent+ +t.dataset.mq);return}
   if(t.dataset.opt!==undefined){selOpt=t.dataset.opt;const p=prod(curP);if(p)drawProduct(p);return}
   if(t.dataset.add){addToCart(t.dataset.add,+$('#mq').textContent,selOpt);$('#layer').innerHTML='';return}
-  if(t.dataset.cq!==undefined){const x=cart[+t.dataset.cq];if(!x)return;const p=prod(x.id);x.qty=Math.min(itemStock(p,x.opt),x.qty+ +t.dataset.d);saveCart();openCart();return}
+  if(t.dataset.cq!==undefined){const x=cart[+t.dataset.cq];if(!x)return;const p=prod(x.id);x.qty=Math.min(itemStock(p,x.opt),p.cat==='drop'?(p.drop_limit||1):1e9,x.qty+ +t.dataset.d);saveCart();openCart();return}
   if(t.dataset.go){$('#layer').innerHTML='';location.hash='#'+t.dataset.go;return}
   if(t.dataset.tier){$('#m-tier').value=t.dataset.tier;$('#memf').scrollIntoView({behavior:'smooth'});$('#m-name').focus({preventScroll:true});return}
   if(t.dataset.rsvp){rsvp(t.dataset.rsvp);return}
+  if(t.dataset.cop){copIt(t.dataset.cop);return}
   if(t.id==='zipchip'){openZipModal();return}
+  if(t.id==='copyref'){const l=t.dataset.link,msg=`Get $${Number(D.promo?.ref_new||10)} off your first Cargo+420 delivery: ${l}`;(navigator.share?navigator.share({text:msg}).catch(()=>{}):navigator.clipboard?.writeText(msg).then(()=>toast('Link copied','Send it to a friend.',true)).catch(()=>{}));return}
   if(t.id==='zip-loc'){useLocation();return}
   if(t.closest('.zc-res')&&t.matches('a[href="#shop"]')){$('#layer').innerHTML=''}
 });
@@ -428,7 +515,7 @@ let qT;
 document.addEventListener('change',e=>{
   const t=e.target;
   if(t.id==='sort'||t.id==='sort2'){sortBy=t.value;vShop($('#view'));return}
-  if(t.id==='co-city'||t.id==='co-phone'){readCo();refreshQuote();return}
+  if(t.id==='co-city'||t.id==='co-phone'||t.id==='co-ref'){readCo();refreshQuote();return}
 });
 document.addEventListener('input',e=>{
   if(e.target.id==='shopq'){clearTimeout(qT);qT=setTimeout(()=>{q=e.target.value;vShop($('#view'));const i=$('#shopq');i.focus();i.setSelectionRange(q.length,q.length)},250)}
@@ -442,4 +529,5 @@ const gate=$('#gate');gate.hidden=store.get('c420age',0)===1;
 $('#gate-yes').onclick=()=>{store.set('c420age',1);gate.hidden=true};
 $('#gate-no').onclick=()=>{$('#gate-msg').hidden=false};
 loadAll().then(go).catch(err=>{$('#view').innerHTML=`<div class="wrap loading">We couldn't load the menu. Refresh the page to try again.<br><small>${esc(errMsg(err))}</small></div>`});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&['shop','home'].includes(route))loadAll().then(render).catch(()=>{})});
+setInterval(()=>{if(route==='home'){const b=document.querySelector('.dropban');if(b){const t=document.createElement('div');t.innerHTML=dropBanner();if(t.firstElementChild)b.replaceWith(t.firstElementChild)}}},1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&['shop','home','drop'].includes(route))loadAll().then(render).catch(()=>{})});
