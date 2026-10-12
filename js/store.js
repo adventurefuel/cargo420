@@ -90,11 +90,11 @@ function vSpecials(V){
   </section></div>`;
 }
 
-function freeCounter(){const n=D.nextFree;if(!n)return'';return`<div class="fc"><div class="fc-plate"><small>Next free order</small><b>#${esc(n.code)}</b></div><div class="fc-txt"><b>${n.away} order${n.away===1?'':'s'} away</b><span>Every order number ending in 420 ships free, up to $${Number(n.cap)}. Your order could be the one.</span></div></div>`}
+function freeCounter(){const n=D.nextFree;if(!n||!(Number(n.cap)>0))return'';return`<div class="fc"><div class="fc-plate"><small>Next free order</small><b>#${esc(n.code)}</b></div><div class="fc-txt"><b>${n.away} order${n.away===1?'':'s'} away</b><span>Every order number ending in 420 ships free, up to $${Number(n.cap)}. Your order could be the one.</span></div></div>`}
 function vHome(V){
   V.innerHTML=`<div class="wrap">
   <section class="hero"><img src="img/logo.webp" alt="Cargo+420 Exclusive Delivery Service"><p>Metro Detroit cannabis delivery. Pick a category, build your order, pay cash at the door.</p>
-   ${dropBanner()}${freeCounter()}
+   ${dropFeature()}${freeCounter()}
    <button class="zipchip" id="zipchip">${myZip?`${ICONS.pin}<span>Delivering to <b>${esc(myZip.city)} ${esc(myZip.zip)}</b></span><u>Change</u>`:`${ICONS.pin}<span>Do we deliver to you?</span><u>Check your ZIP</u>`}</button></section>
   <nav class="catgrid" aria-label="Shop by category">
    ${HOME_CATS.map(id=>{const c=CATS.find(x=>x.id===id);return`<a class="catbtn" href="#${id}">${ICONS[id]}<span>${c.name}</span><small>${c.blurb}</small></a>`}).join('')}
@@ -254,6 +254,7 @@ function vShop(V){
   if(sortBy==='low')list.sort((a,b)=>a.price-b.price);
   if(sortBy==='high')list.sort((a,b)=>b.price-a.price);
   if(sortBy==='name')list.sort((a,b)=>a.name.localeCompare(b.name));
+  list.sort((a,b)=>(b.cat==='flower')-(a.cat==='flower'));
   const on=(t,v)=>shopFilter.type===t&&(v==null||shopFilter.val===v)?'on':'';
   V.innerHTML=`<div class="wrap shop">
    <aside class="side"><h3>Browse by</h3><ul>
@@ -401,6 +402,22 @@ function dropBanner(){
   const msg=st==='live'?`<b>LIVE NOW</b><span>${p.stock} left · ${money(p.price)}</span>`:st==='early'?`<b>${esc(tierName(p.early_tier))} early access is open</b><span>Public release in <i data-cd>${c.h}:${c.m}:${c.s}</i></span>`:st==='sold'?`<b>Sold out${p.sold_out_at?' in '+sellTime(p):''}</b><span>Next drop coming soon</span>`:`<b data-cd>${c.d?c.d+'d ':''}${c.h}:${c.m}:${c.s}</b><span>${esc(dropWhen(p))}</span>`;
   return`<a class="dropban ${st}" href="#drop"><span class="db-no">Cargo Drop ${dropNo(p)}</span><span class="db-msg">${msg}</span><span class="db-go">${st==='live'?'Cop it':'View drop'} →</span></a>`;
 }
+function dropFeature(){
+  const p=curDrop();if(!p)return'';const st=dropState(p);
+  if(st==='sold'&&Date.now()-dropT(p)>3*864e5)return'';
+  const c=cd(dropT(p)-Date.now()),qty=Math.max(1,p.drop_qty||p.stock||1),value=Number(p.drop_value||0),spooky=/hallow/i.test(p.name)?' spooky':'';
+  const clock=st==='soon'||st==='early'?`<div class="df-cd">${c.d?`<div><b class="num" data-fu="d">${c.d}</b><small>days</small></div>`:''}<div><b class="num" data-fu="h">${c.h}</b><small>hrs</small></div><div><b class="num" data-fu="m">${c.m}</b><small>min</small></div><div><b class="num" data-fu="s">${c.s}</b><small>sec</small></div></div>`:'';
+  return`<a class="dropfeat ${st}${spooky}" href="#drop" data-fst="${st}">
+   <div class="df-art">${p.image_url?art(p):dropArt(p)}</div>
+   <div class="df-body">
+    <span class="df-eye">${st==='live'?'Live now':st==='sold'?'Sold out':st==='early'?esc(tierName(p.early_tier))+' early access':'Next drop'} · Cargo Drop ${dropNo(p)}</span>
+    <b class="df-name">${esc(p.name)}</b>
+    <span class="df-when">${st==='sold'?`Gone${p.sold_out_at?' in '+sellTime(p):''}. Next drop coming soon.`:st==='live'?`${p.stock} of ${qty} left`:esc(dropWhen(p))}</span>
+    ${clock}
+    <span class="df-meta"><b class="num">${money(p.price)}</b>${value>Number(p.price)?` · ${money(value)}+ value`:''} · ${qty} bags · never restocked</span>
+    <span class="df-go">${st==='live'?'Cop it now':st==='sold'?'See past drops':'See the drop'} →</span>
+   </div></a>`;
+}
 function gcalLink(p){const f=d=>new Date(d).toISOString().replace(/[-:]|\.\d{3}/g,'');const e=new Date(dropT(p)+30*60e3);return`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Cargo Drop '+dropNo(p)+' · '+p.name)}&dates=${f(p.drop_at)}/${f(e)}&details=${encodeURIComponent(location.origin+'/#drop')}`}
 let dropTick=null,dropPoll=null;
 function stopDropTimers(){clearInterval(dropTick);clearInterval(dropPoll);dropTick=dropPoll=null}
@@ -416,7 +433,7 @@ function drawDrop(p,tickOnly){
   const st=dropState(p),c=cd(dropT(p)-Date.now()),qty=Math.max(1,p.drop_qty||p.stock||1),left=Math.max(0,p.stock),pct=Math.round(left/qty*100);
   const W=$('#dropwrap');if(!W)return;
   if(tickOnly&&W.dataset.st===st){W.querySelectorAll('[data-u]').forEach(e=>e.textContent=c[e.dataset.u]);const dd=W.querySelector('[data-d]');if(dd)dd.textContent=c.d;return}
-  W.dataset.st=st;
+  W.dataset.st=st;W.classList.toggle('spooky',/hallow/i.test(p.name));
   const past=drops().filter(x=>x!==p&&x.stock<=0).reverse().slice(0,6);
   const value=Number(p.drop_value||0);
   W.innerHTML=`
@@ -529,5 +546,7 @@ const gate=$('#gate');gate.hidden=store.get('c420age',0)===1;
 $('#gate-yes').onclick=()=>{store.set('c420age',1);gate.hidden=true};
 $('#gate-no').onclick=()=>{$('#gate-msg').hidden=false};
 loadAll().then(go).catch(err=>{$('#view').innerHTML=`<div class="wrap loading">We couldn't load the menu. Refresh the page to try again.<br><small>${esc(errMsg(err))}</small></div>`});
-setInterval(()=>{if(route==='home'){const b=document.querySelector('.dropban');if(b){const t=document.createElement('div');t.innerHTML=dropBanner();if(t.firstElementChild)b.replaceWith(t.firstElementChild)}}},1000);
+setInterval(()=>{if(route!=='home')return;const b=document.querySelector('.dropfeat');if(!b)return;const p=curDrop();if(!p)return;
+  if(b.dataset.fst!==dropState(p)){const t=document.createElement('div');t.innerHTML=dropFeature();t.firstElementChild?b.replaceWith(t.firstElementChild):b.remove();return}
+  const c=cd(dropT(p)-Date.now());b.querySelectorAll('[data-fu]').forEach(e=>e.textContent=c[e.dataset.fu])},1000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&['shop','home','drop'].includes(route))loadAll().then(render).catch(()=>{})});
