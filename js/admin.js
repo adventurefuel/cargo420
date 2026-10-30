@@ -103,7 +103,19 @@ async function reloadData(){
     sb.from('promo_settings').select('*').eq('id',1).single()]);
   const bad=res.find(x=>x.error);if(bad)throw bad.error;
   [A.orders,A.customers,A.drivers,A.members,A.products,A.zones,A.settings,A.tiers,A.events,A.zips,A.promo]=res.map(x=>x.data);
-  render();
+  await loadYtd(false);render();
+}
+/* ---------- sales year to date ---------- */
+let ytdT=null;
+async function loadYtd(draw=true){const {data,error}=await sb.rpc('sales_ytd');if(!error&&data){A.ytd=data;if(draw&&tab==='orders'){const el=$('#ytd');if(el)el.outerHTML=ytdBar()}}}
+function ytdSoon(){clearTimeout(ytdT);ytdT=setTimeout(()=>loadYtd(true),1500)}
+const money$=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+function ytdBar(){
+  const y=A.ytd;if(!y)return'<div id="ytd"></div>';
+  const ms=(y.months||[]).map(Number),max=Math.max(1,...ms),now=new Date(),cur=now.getMonth(),L='JFMAMJJASOND';
+  const thisM=ms[cur]||0,avg=y.orders?y.total/y.orders:0;
+  return`<section class="ytd" id="ytd"><div class="ytd-l"><span class="eyebrow">Sales year to date · ${y.year}</span><b class="num">${money$(y.total)}</b><span class="ytd-sub">${y.orders} delivered order${y.orders===1?'':'s'} · avg ${money$(avg)} · ${now.toLocaleString('en-US',{month:'long'})} ${money$(thisM)}</span></div>
+   <div class="ytd-m" aria-label="Sales by month">${ms.map((v,i)=>`<div class="${i===cur?'cur':i>cur?'fut':''}" title="${new Date(y.year,i,1).toLocaleString('en-US',{month:'long'})}: ${money$(v)}"><i style="--h:${i>cur?0:Math.max(v?.06:.02,v/max).toFixed(3)}"></i><small>${L[i]}</small></div>`).join('')}</div></section>`;
 }
 function subscribe(){
   if(channel)sb.removeChannel(channel);
@@ -113,7 +125,7 @@ function subscribe(){
        toast(`New order ${o.code} · ${money(o.total)}`,`${o.cust_name} · ${o.city} · cash`);chime();titleFlash();
        const {data}=await sb.from('customers').select('*').eq('phone',o.cust_phone).maybeSingle();if(data){A.customers=A.customers.filter(c=>c.id!==data.id);A.customers.unshift(data)}
        sb.from('products').select('*').order('name').then(r=>{if(r.data)A.products=r.data;render()});}
-     else if(p.eventType==='UPDATE'){const i=A.orders.findIndex(x=>x.id===p.new.id);if(i>=0)A.orders[i]=p.new;else A.orders.unshift(p.new)}
+     else if(p.eventType==='UPDATE'){const i=A.orders.findIndex(x=>x.id===p.new.id);if(i>=0)A.orders[i]=p.new;else A.orders.unshift(p.new);ytdSoon()}
      else if(p.eventType==='DELETE'){A.orders=A.orders.filter(x=>x.id!==p.old.id)}
      render();})
    .on('postgres_changes',{event:'*',schema:'public',table:'members'},p=>{
@@ -147,6 +159,7 @@ async function render(){
     <div class="row"><span class="live"><i style="${liveOk?'':'background:var(--warn)'}"></i><span id="livetxt">${liveOk?'Live':'Connecting…'}</span></span>
      <button class="btn sm ${A.settings.open?'green':'red'}" id="openbtn">${A.settings.open?'Taking orders':'Closed · not taking orders'}</button></div></div>
    ${alertCard(ps)}
+   ${tab==='orders'?ytdBar():''}
    <div class="kpis">
     <div class="kpi"><div class="l">Today's sales (collected)</div><div class="v">${money(sales)}</div></div>
     <div class="kpi"><div class="l">Orders today</div><div class="v">${today.length}</div></div>
