@@ -180,6 +180,10 @@ function alertCard(ps){
 }
 
 /* ---------- orders ---------- */
+function itemRow(i){
+  const P=A.products.find(x=>x.id===i.id),nm=P?P.name:String(i.name||'').split(' — ')[0],opt=i.opt||(P?'':(String(i.name||'').split(' — ')[1]||''));
+  return`<div class="oi"><div class="oi-th">${P?art(P):art({id:String(i.id||i.name),name:i.name,cat:'flower'})}</div><div class="oi-t"><b><span class="num">${i.qty}×</span> ${esc(nm)}</b>${opt?`<small>${esc(opt)}</small>`:''}</div><span class="oi-p num">${money(Number(i.price)*i.qty)}</span></div>`;
+}
 function aOrders(B){
   const act=o=>['new','confirmed','out'].includes(o.status);
   const match=(o,s)=>s==='active'?act(o):s==='today'?isToday(o.created_at):o.status===s;
@@ -191,7 +195,7 @@ function aOrders(B){
     <div style="margin-top:6px;font-weight:600">${esc(o.cust_name)} ${o.tier?`<span class="pill p-muted">${esc(tierName(o.tier))}</span>`:''}${Number(o.free_win)?`<span class="pill p-new">420 WINNER −${money(o.free_win)}</span>`:''}${o.ref_code?`<span class="pill p-muted">Referred · ${esc(o.ref_code)}</span>`:''}${Number(o.credit_used)?`<span class="pill p-muted">Credit −${money(o.credit_used)}</span>`:''}</div><div class="meta"><a href="tel:${esc(o.cust_phone.replace(/\D/g,''))}">${esc(o.cust_phone)}</a></div>
     ${c&&!c.id_verified?'<div class="meta" style="color:var(--warn)">ID not yet verified</div>':''}</div>
    <div><div class="meta">${esc(o.address)}, ${esc(o.city)} · <a href="https://maps.google.com/?q=${encodeURIComponent(o.address+', '+o.city+', MI')}" target="_blank" rel="noopener">Map</a></div>${o.notes?`<div class="meta" style="color:var(--yellow)">Note: ${esc(o.notes)}</div>`:''}
-    <div class="items" style="margin-top:6px">${o.items.map(i=>`${i.qty}× ${esc(i.name)}`).join(' · ')}</div></div>
+    <div class="oitems">${o.items.map(itemRow).join('')}</div></div>
    <div><div class="tot">${money(o.total)}</div><div class="meta" style="text-align:right">${Number(o.discount)?`member −${money(o.discount)} · `:''}${Number(o.fee)?`fee ${money(o.fee)}`:'no fee'}</div>
     ${o.status==='delivered'?`<div class="meta" style="text-align:right">Cash ${o.cash_in?'turned in':'with '+esc(drvName(o.driver_id)||'driver')}</div>`:''}</div>
    <div class="acts">${o.status==='cancelled'||o.status==='delivered'?`<span class="meta">${o.driver_id?'Driver: '+esc(drvName(o.driver_id)):''}</span>`:`
