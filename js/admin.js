@@ -122,7 +122,7 @@ function subscribe(){
   channel=sb.channel('owner-live')
    .on('postgres_changes',{event:'*',schema:'public',table:'orders'},async p=>{
      if(p.eventType==='INSERT'){const o=p.new;if(!A.orders.some(x=>x.id===o.id))A.orders.unshift(o);flashIds.add(o.id);setTimeout(()=>flashIds.delete(o.id),8000);
-       toast(`New order ${o.code} · ${money(o.total)}`,`${o.cust_name} · ${o.city} · cash`);chime();titleFlash();
+       toast(`New order ${o.code} · ${money(o.total)}`,`${o.cust_name} · ${o.city} · ${payOf(o)}`);chime();titleFlash();
        const {data}=await sb.from('customers').select('*').eq('phone',o.cust_phone).maybeSingle();if(data){A.customers=A.customers.filter(c=>c.id!==data.id);A.customers.unshift(data)}
        sb.from('products').select('*').order('name').then(r=>{if(r.data)A.products=r.data;render()});}
      else if(p.eventType==='UPDATE'){const i=A.orders.findIndex(x=>x.id===p.new.id);if(i>=0)A.orders[i]=p.new;else A.orders.unshift(p.new);ytdSoon()}
@@ -148,7 +148,7 @@ async function render(){
   if(!user)return;
   const today=A.orders.filter(o=>isToday(o.created_at)&&o.status!=='cancelled');
   const sales=today.filter(o=>o.status==='delivered').reduce((s,o)=>s+Number(o.collected??o.total),0);
-  const street=A.orders.filter(o=>o.status==='out').reduce((s,o)=>s+Number(o.total),0)+A.orders.filter(o=>o.status==='delivered'&&!o.cash_in).reduce((s,o)=>s+Number(o.collected??o.total),0);
+  const street=A.orders.filter(o=>o.status==='out'&&isCash(o)).reduce((s,o)=>s+Number(o.total),0)+A.orders.filter(o=>o.status==='delivered'&&!o.cash_in&&isCash(o)).reduce((s,o)=>s+Number(o.collected??o.total),0);
   const nNew=A.orders.filter(o=>o.status==='new').length,pend=A.members.filter(m=>m.status==='pending').length,low=A.products.filter(p=>p.active&&p.cat!=='drop'&&p.stock<=3).length;
   const liveDrop=A.products.some(p=>p.cat==='drop'&&p.active&&p.stock>0&&p.drop_at&&new Date(p.drop_at)<=new Date())?'LIVE':0;
   const tabs=[['orders','Orders',nNew],['customers','Customers'],['drivers','Drivers & cash'],['inventory','Inventory',low],['drops','Drops',liveDrop],['members','Members',pend],['events','Events'],['reports','Reports'],['settings','Settings']];
@@ -194,7 +194,7 @@ function aOrders(B){
    <div><div class="row"><span class="id">${esc(o.code)}</span><span class="pill p-${o.status}">${SL[o.status]}</span></div><div class="meta">${new Date(o.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})} · ${ago(o.created_at)}</div>
     <div style="margin-top:6px;font-weight:600">${esc(o.cust_name)} ${o.tier?`<span class="pill p-muted">${esc(tierName(o.tier))}</span>`:''}${Number(o.free_win)?`<span class="pill p-new">420 WINNER −${money(o.free_win)}</span>`:''}${o.ref_code?`<span class="pill p-muted">Referred · ${esc(o.ref_code)}</span>`:''}${Number(o.credit_used)?`<span class="pill p-muted">Credit −${money(o.credit_used)}</span>`:''}</div><div class="meta"><a href="tel:${esc(o.cust_phone.replace(/\D/g,''))}">${esc(o.cust_phone)}</a></div>
     ${c&&!c.id_verified?'<div class="meta" style="color:var(--warn)">ID not yet verified</div>':''}</div>
-   <div><div class="meta">${esc(o.address)}, ${esc(o.city)} · <a href="https://maps.google.com/?q=${encodeURIComponent(o.address+', '+o.city+', MI')}" target="_blank" rel="noopener">Map</a></div>${o.notes?`<div class="meta" style="color:var(--yellow)">Note: ${esc(o.notes)}</div>`:''}
+   <div><div class="meta">${esc(o.address)}, ${esc(o.city)} · <a href="https://maps.google.com/?q=${encodeURIComponent(o.address+', '+o.city+', MI')}" target="_blank" rel="noopener">Map</a></div><div class="paytag pay-${payOf(o)==='Cash'?'cash':payOf(o).startsWith('Cash App')?'cashapp':'card'}">Pays: ${esc(payOf(o))}</div>${noteOf(o)?`<div class="meta" style="color:var(--yellow)">Note: ${esc(noteOf(o))}</div>`:''}
     <div class="oitems">${o.items.map(itemRow).join('')}</div></div>
    <div><div class="tot">${money(o.total)}</div><div class="meta" style="text-align:right">${Number(o.discount)?`member −${money(o.discount)} · `:''}${Number(o.fee)?`fee ${money(o.fee)}`:'no fee'}</div>
     ${o.status==='delivered'?`<div class="meta" style="text-align:right">Cash ${o.cash_in?'turned in':'with '+esc(drvName(o.driver_id)||'driver')}</div>`:''}</div>
@@ -202,7 +202,7 @@ function aOrders(B){
     <select data-drv="${o.id}" aria-label="Assign driver"><option value="">Assign driver</option>${A.drivers.filter(d=>d.active||d.id===o.driver_id).map(d=>`<option value="${d.id}" ${o.driver_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
     ${o.status==='new'?`<button class="btn sm" data-st="${o.id}" data-to="confirmed">Confirm order</button>`:''}
     ${o.status==='confirmed'?`<button class="btn sm" data-st="${o.id}" data-to="out" ${o.driver_id?'':'disabled title="Assign a driver first"'}>Send out</button>`:''}
-    ${o.status==='out'?`<button class="btn green sm" data-st="${o.id}" data-to="delivered">Delivered · cash collected</button>`:''}
+    ${o.status==='out'?`<button class="btn green sm" data-st="${o.id}" data-to="delivered">Delivered · paid</button>`:''}
     <button class="btn red sm" data-cancel="${o.id}">Cancel</button>`}</div>
   </article>`}).join('')||'<p class="note">No orders here right now. New orders appear at the top with a chime and a phone alert.</p>'}</div></div>`;
 }
@@ -225,10 +225,14 @@ function aCustomers(B){
    <td><input data-cnote="${c.id}" value="${esc(c.notes||'')}" placeholder="Add note" style="min-width:200px"></td></tr>`).join('')||'<tr><td colspan="9" class="note">Customers appear here after their first order.</td></tr>'}</tbody></table></div></div>`;
 }
 /* ---------- drivers & cash ---------- */
+const payOf=o=>{const m=/PAY: ([^·]+)/.exec(o.notes||'');return m?m[1].trim():'Cash'};
+const isCash=o=>payOf(o)==='Cash';
+const noteOf=o=>(o.notes||'').replace(/PAY: [^·]+(· )?/,'').trim();
 function aDrivers(B){
   const sum=a=>a.reduce((s,o)=>s+Number(o.collected??o.total),0);
-  const cards=A.drivers.filter(d=>d.active).map(d=>{const mine=A.orders.filter(o=>o.driver_id===d.id);const out=mine.filter(o=>o.status==='out'),conf=mine.filter(o=>o.status==='confirmed'),held=mine.filter(o=>o.status==='delivered'&&!o.cash_in),inT=mine.filter(o=>o.cash_in&&o.cash_in_at&&isToday(o.cash_in_at));
+  const cards=A.drivers.filter(d=>d.active).map(d=>{const mine=A.orders.filter(o=>o.driver_id===d.id);const out=mine.filter(o=>o.status==='out'),conf=mine.filter(o=>o.status==='confirmed'),held=mine.filter(o=>o.status==='delivered'&&!o.cash_in&&isCash(o)),inT=mine.filter(o=>o.cash_in&&o.cash_in_at&&isToday(o.cash_in_at));
    return`<div class="dcard"><div class="row" style="justify-content:space-between"><h3>${esc(d.name)}</h3><button class="linkbtn" data-drvoff="${d.id}">Remove</button></div>
+    <label style="font-size:12px">Driver login email<input type="email" data-drvemail="${d.id}" value="${esc(d.email||'')}" placeholder="driver@email.com" style="padding:6px 9px;font-size:13px"></label>
     <div class="kv"><span>Queued (confirmed)</span><b>${conf.length}</b></div>
     <div class="kv"><span>On route now</span><b>${out.length} · ${money(sum(out))} to collect</b></div>
     <div class="kv" style="color:var(--yellow)"><span>Cash in hand</span><b>${money(sum(held))}</b></div>
@@ -237,7 +241,8 @@ function aDrivers(B){
     <button class="btn sm" data-cashin="${d.id}" ${held.length?'':'disabled'}>Cash turned in · ${money(sum(held))}</button></div>`}).join('');
   const un=A.orders.filter(o=>!o.driver_id&&['new','confirmed'].includes(o.status)).length;
   B.innerHTML=`<div style="display:grid;gap:14px">${un?`<div class="warnbox">${un} active order${un>1?'s':''} still need a driver. Assign from the Orders tab.</div>`:''}<div class="drivers">${cards||'<p class="note">Add your drivers below so you can assign orders and track cash.</p>'}</div>
-   <form class="row" id="drvf"><input id="drv-name" placeholder="New driver name" style="max-width:240px" required><button class="btn ghost sm">Add driver</button></form></div>`;
+   <form class="row" id="drvf"><input id="drv-name" placeholder="New driver name" style="max-width:220px" required><input id="drv-email" type="email" placeholder="Login email (optional)" style="max-width:260px"><button class="btn ghost sm">Add driver</button></form>
+   <p class="note" style="margin:0">Drivers sign in at this same dashboard address with the email you enter here. They only see the driver screen: active orders, taking an order, On my way and Delivered. No customers list, sales, inventory or settings.</p></div>`;
 }
 /* ---------- inventory ---------- */
 let editing=null;
@@ -440,7 +445,7 @@ document.addEventListener('click',async e=>{
   if(t.dataset.st){t.disabled=true;const o=await upd('orders',t.dataset.st,{status:t.dataset.to});if(o){toast(`${o.code} → ${SL[o.status]}`,'',true);if(o.status==='delivered'){const c=A.customers.find(c=>c.id===o.customer_id);if(c)c.id_verified=true}}render();return}
   if(t.dataset.cancel){if(pendingCancel!==t.dataset.cancel){pendingCancel=t.dataset.cancel;t.textContent='Tap again to cancel';setTimeout(()=>{if(pendingCancel===t.dataset.cancel){pendingCancel=null;t.textContent='Cancel'}},4000);return}
     pendingCancel=null;const o=await upd('orders',t.dataset.cancel,{status:'cancelled'});if(o)toast(`${o.code} cancelled`,'Items were put back in stock.',true);render();return}
-  if(t.dataset.cashin){const ids=A.orders.filter(o=>o.driver_id===t.dataset.cashin&&o.status==='delivered'&&!o.cash_in).map(o=>o.id);
+  if(t.dataset.cashin){const ids=A.orders.filter(o=>o.driver_id===t.dataset.cashin&&o.status==='delivered'&&!o.cash_in&&isCash(o)).map(o=>o.id);
     const {data,error}=await sb.from('orders').update({cash_in:true}).in('id',ids).select();if(error)return toast('Not saved',errMsg(error));
     data.forEach(n=>{const i=A.orders.findIndex(x=>x.id===n.id);if(i>=0)A.orders[i]=n});toast('Cash turned in and logged','',true);render();return}
   if(t.dataset.drvoff){await upd('drivers',t.dataset.drvoff,{active:false});render();return}
@@ -457,6 +462,7 @@ document.addEventListener('click',async e=>{
 document.addEventListener('change',async e=>{
   const t=e.target;
   if(t.dataset.drv){await upd('orders',t.dataset.drv,{driver_id:t.value||null});render();return}
+  if(t.dataset.drvemail){const em=t.value.trim().toLowerCase()||null;if(await upd('drivers',t.dataset.drvemail,{email:em}))toast(em?'Driver login saved':'Driver login removed',em?`${em} can now sign in as a driver.`:'',true);return}
   if(t.dataset.idv){await upd('customers',t.dataset.idv,{id_verified:t.checked});render();return}
   if(t.dataset.cnote){if(await upd('customers',t.dataset.cnote,{notes:t.value.trim()||null}))toast('Note saved','',true);return}
   if(t.dataset.price){await upd('products',t.dataset.price,{price:Math.max(0,+t.value||0)});return}
@@ -472,7 +478,7 @@ document.addEventListener('input',e=>{
 document.addEventListener('submit',async e=>{
   e.preventDefault();const f=e.target;
   if(f.id==='authf')return submitAuth(f);
-  if(f.id==='drvf'){const n=$('#drv-name').value.trim();if(!n)return;const {data,error}=await sb.from('drivers').insert({name:n}).select().single();if(error)return toast('Not saved',errMsg(error));A.drivers.push(data);render();return}
+  if(f.id==='drvf'){const n=$('#drv-name').value.trim();if(!n)return;const em=($('#drv-email')?.value||'').trim().toLowerCase()||null;const {data,error}=await sb.from('drivers').insert({name:n,email:em}).select().single();if(error)return toast('Not saved',errMsg(error));A.drivers.push(data);render();return}
   if(f.id==='evf'){const rec={title:$('#ev-title').value.trim(),starts_on:$('#ev-date').value,time_label:$('#ev-time').value.trim()||null,place:$('#ev-place').value.trim()||null,description:$('#ev-desc').value.trim()||null,members_only:$('#ev-mem').checked};
     if(!rec.title||!rec.starts_on)return toast('Add a title and date','',true);
     const {data,error}=await sb.from('events').insert(rec).select().single();if(error)return toast('Not saved',errMsg(error));A.events.push(data);A.events.sort((a,b)=>a.starts_on.localeCompare(b.starts_on));toast('Event published','It now shows on the Events page.',true);render();return}
@@ -492,10 +498,72 @@ async function bootInner(){
   if(!session){user=null;return vAuth('in')}
   user=session.user;
   const {data:ok}=await sb.rpc('is_admin');
-  if(!ok){V().innerHTML=`<div class="authbox"><h1 style="font-size:30px">No owner access</h1><p class="note">${esc(user.email)} is signed in but isn't set up as an owner. Ask the owner to add this account.</p><button class="btn ghost" id="signout2">Sign out</button></div>`;$('#signout2').onclick=async()=>{await sb.auth.signOut();location.reload()};return}
+  if(!ok){const {data:drv}=await sb.rpc('my_driver');if(drv&&drv.id)return driverBoot(drv);V().innerHTML=`<div class="authbox"><h1 style="font-size:30px">No owner access</h1><p class="note">${esc(user.email)} is signed in but isn't set up as an owner. Ask the owner to add this account.</p><button class="btn ghost" id="signout2">Sign out</button></div>`;$('#signout2').onclick=async()=>{await sb.auth.signOut();location.reload()};return}
   $('#signout').hidden=false;
   try{await reloadData();subscribe()}catch(e){V().innerHTML=`<div class="wrap loading">Couldn't load the dashboard. ${esc(errMsg(e))}</div>`}
 }
 sb.auth.onAuthStateChange((ev)=>{if(ev==='PASSWORD_RECOVERY'){user=null;vAuth('newpw')}else if(ev==='SIGNED_IN'&&!user)boot()});
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h!==tab&&user){tab=h;render()}});
 boot();
+
+/* ================= DRIVER MODE ================= */
+let DRV=null,DO=[],dTab='available',dPoll=null,dKnown=null,dPend=null;
+async function driverBoot(d){
+  DRV=d;document.title='Cargo+420 Driver';$('#signout').hidden=false;
+  const p=await sb.from('products').select('id,name,cat,image_url').eq('active',true);if(p.data)A.products=p.data;
+  await drvLoad();clearInterval(dPoll);dPoll=setInterval(()=>{if(!document.hidden)drvLoad()},20000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&DRV)drvLoad()});
+}
+async function drvLoad(){
+  const {data,error}=await sb.rpc('driver_orders');
+  if(error){V().innerHTML=`<div class="wrap loading">${esc(errMsg(error))}</div>`;return}
+  DO=data||[];
+  const avail=DO.filter(o=>!o.driver_id&&['new','confirmed'].includes(o.status)).map(o=>o.id);
+  if(dKnown&&avail.some(id=>!dKnown.has(id))){chime();toast('New order available','Tap Available to take it.')}
+  dKnown=new Set(avail);drvRender();
+}
+function drvCard(o){
+  const mine=o.mine,pay=payOf(o),note=noteOf(o).replace(/^Imported from Wix #\d+ ?·? ?/,'');
+  const tel=String(o.cust_phone||'').replace(/\D/g,'');
+  let acts='';
+  if(o.status==='delivered')acts=`<span class="pill p-delivered">Delivered ${new Date(o.delivered_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>`;
+  else if(!o.driver_id)acts=`<button class="btn dbtn" data-dact="take" data-o="${o.id}">Take this order</button>`;
+  else if(!mine)acts=`<span class="pill p-muted">Taken by ${esc(o.driver_name||'another driver')}</span>`;
+  else if(o.status==='out')acts=`<button class="btn green dbtn" data-dact="delivered" data-o="${o.id}">${dPend===o.id?'Tap again to confirm':'Delivered · '+esc(pay)+' collected'}</button><button class="linkbtn" data-dact="release" data-o="${o.id}">Release</button>`;
+  else acts=`<button class="btn dbtn" data-dact="out" data-o="${o.id}">On my way</button><button class="linkbtn" data-dact="release" data-o="${o.id}">Release</button>`;
+  return`<article class="dorder s-${o.status}">
+   <div class="do-top"><span class="id">${esc(o.code)}</span><span class="pill p-${o.status}">${o.status==='new'?'Not confirmed yet':SL[o.status]}</span><span class="meta">${ago(o.created_at)}</span></div>
+   <div class="do-cust"><b>${esc(o.cust_name)}</b>${tel?`<a class="btn ghost sm" href="tel:${tel}">Call</a><a class="btn ghost sm" href="sms:${tel}">Text</a>`:''}</div>
+   <a class="do-addr" href="https://maps.google.com/?q=${encodeURIComponent(o.address+', '+o.city+', MI')}" target="_blank" rel="noopener">${esc(o.address)}, ${esc(o.city)} <u>Directions</u></a>
+   ${note?`<div class="meta" style="color:var(--yellow)">Note: ${esc(note)}</div>`:''}
+   <div class="oitems">${(o.items||[]).map(itemRow).join('')}</div>
+   <div class="do-foot"><div><span class="paytag pay-${pay==='Cash'?'cash':pay.startsWith('Cash App')?'cashapp':'card'}">${esc(pay)}</span><div class="do-tot num">${money(o.total)}</div></div><div class="do-acts">${acts}</div></div>
+  </article>`;
+}
+function drvRender(){
+  const avail=DO.filter(o=>['new','confirmed'].includes(o.status)&&o.driver_id!==DRV.id);
+  const mine=DO.filter(o=>o.mine&&['new','confirmed','out'].includes(o.status));
+  const done=DO.filter(o=>o.mine&&o.status==='delivered');
+  const cashDone=done.filter(o=>payOf(o)==='Cash').reduce((s,o)=>s+Number(o.collected??o.total),0);
+  const list={available:avail,mine,done}[dTab];
+  V().innerHTML=`<div class="wrap adm drv">
+   <div class="admtop"><div><span class="eyebrow">Cargo+420 · Driver</span><h1 style="font-size:36px">Hi, ${esc(DRV.name)}</h1></div><button class="btn ghost sm" id="drefresh">Refresh</button></div>
+   <div class="kpis"><div class="kpi"><div class="l">My active</div><div class="v">${mine.length}</div></div><div class="kpi"><div class="l">Delivered today</div><div class="v">${done.length}</div></div><div class="kpi cash"><div class="l">Cash to turn in</div><div class="v">${money(cashDone)}</div></div></div>
+   <div class="tabs" role="tablist">${[['available','Available',avail.filter(o=>!o.driver_id).length],['mine','My orders',mine.length],['done','Done today',0]].map(([id,l,b])=>`<button role="tab" class="${dTab===id?'on':''}" data-dtab="${id}">${l}${b?`<span class="b">${b}</span>`:''}</button>`).join('')}</div>
+   <div class="olist">${list.map(drvCard).join('')||`<p class="note">${dTab==='available'?'No open orders right now. New ones show up here automatically.':dTab==='mine'?'You have no active orders. Take one from Available.':'Nothing delivered yet today.'}</p>`}</div>
+   <p class="note">Orders refresh every 20 seconds. Keep this page open to hear a chime when a new order comes in.</p></div>`;
+}
+document.addEventListener('click',async e=>{
+  if(!DRV)return;const t=e.target.closest('button');if(!t)return;
+  if(t.dataset.dtab){dTab=t.dataset.dtab;drvRender();return}
+  if(t.id==='drefresh'){drvLoad();return}
+  if(t.dataset.dact){
+    const a=t.dataset.dact,id=t.dataset.o;
+    if(a==='delivered'&&dPend!==id){dPend=id;drvRender();setTimeout(()=>{if(dPend===id){dPend=null;drvRender()}},4000);return}
+    dPend=null;t.disabled=true;
+    const {error}=await sb.rpc('driver_action',{p_order:id,p_action:a});
+    if(error)toast('Not updated',errMsg(error));
+    else{toast({take:'Order is yours',out:'Marked on the way',delivered:'Delivered. Nice work.',release:'Order released'}[a],'',true);if(a==='take')dTab='mine';if(a==='delivered')dTab='mine'}
+    drvLoad();
+  }
+});

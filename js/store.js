@@ -2,6 +2,8 @@
 const HOME_CATS=['flower','edibles','cbd','concentrates','mushrooms','vapes','enhance'];
 const D={products:[],zones:[],settings:{},tiers:[],events:[],zips:{}};
 const prod=id=>D.products.find(p=>p.id===id);
+const PAYS=[{id:'cash',label:'Cash',sub:'Exact change helps'},{id:'cashapp',label:'Cash App',sub:'$420Cargo'},{id:'card',label:'Card tap',sub:'Square · debit/credit'}];
+const payLabel=id=>id==='cashapp'?'Cash App ($420Cargo)':id==='card'?'Card tap (Square)':'Cash';
 const shopItems=()=>D.products.filter(p=>p.cat!=='drop');
 const choices=p=>p&&p.options&&Array.isArray(p.options.choices)?p.options.choices:null;
 const choiceOf=(p,opt)=>(choices(p)||[]).find(c=>c.label===opt)||null;
@@ -40,7 +42,7 @@ function render(){
   document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.r===route));
   const b=$('#banner');
   if(!D.settings.open){b.className='banner closed';b.textContent='We are closed right now and not taking orders. Hours: '+D.settings.hours}
-  else{b.className='banner';b.textContent=`Cash on delivery only · $${Number(D.settings.base_min)} minimum on every order · Valid 21+ ID checked at delivery · Hours ${D.settings.hours}`}
+  else{b.className='banner';b.textContent=`Pay at the door: Cash · Cash App $420Cargo · Card tap · $${Number(D.settings.base_min)} minimum on every order · Valid 21+ ID checked at delivery · Hours ${D.settings.hours}`}
   stopDropTimers();
   drawCatbar();
   ({home:vHome,shop:vShop,drop:vDrop,specials:vSpecials,members:vMembers,events:vEvents,areas:vAreas,checkout:vCheckout,done:vDone}[route])($('#view'));
@@ -94,7 +96,7 @@ function vSpecials(V){
 function freeCounter(){const n=D.nextFree;if(!n||!(Number(n.cap)>0))return'';return`<div class="fc"><div class="fc-plate"><small>Next free order</small><b>#${esc(n.code)}</b></div><div class="fc-txt"><b>${n.away} order${n.away===1?'':'s'} away</b><span>Every order number ending in 420 ships free, up to $${Number(n.cap)}. Your order could be the one.</span></div></div>`}
 function vHome(V){
   V.innerHTML=`<div class="wrap">
-  <section class="hero"><img src="img/logo.webp" alt="Cargo+420 Exclusive Delivery Service"><p>Metro Detroit cannabis delivery. Pick a category, build your order, pay cash at the door.</p>
+  <section class="hero"><img src="img/logo.webp" alt="Cargo+420 Exclusive Delivery Service"><p>Metro Detroit cannabis delivery. Pick a category, build your order, pay at the door with cash, Cash App or card.</p>
    ${dropFeature()}${freeCounter()}
    <button class="zipchip" id="zipchip">${myZip?`${ICONS.pin}<span>Delivering to <b>${esc(myZip.city)} ${esc(myZip.zip)}</b></span><u>Change</u>`:`${ICONS.pin}<span>Do we deliver to you?</span><u>Check your ZIP</u>`}</button></section>
   <nav class="catgrid" aria-label="Shop by category">
@@ -102,7 +104,7 @@ function vHome(V){
    <a class="catbtn all" href="#shop">${ICONS.all}<span>Shop all</span><small>${shopItems().length} products</small></a>
   </nav>
   <div class="strip">
-   <div><b>Cash on delivery</b><p>No cards, no apps. Have cash ready when your driver arrives.</p></div>
+   <div><b>Pay your way</b><p>Cash, Cash App (<b>$420Cargo</b>) or tap your card with Square when your driver arrives.</p></div>
    <div><b>21+ with ID</b><p>Meet your driver at their vehicle with a valid government ID.</p></div>
    <div><b>Members save up to ${Math.max(0,...D.tiers.map(t=>t.pct_off))}%</b><p>${D.tiers.map(t=>t.name).join(', ')}. <a href="#members">See membership</a>.</p></div>
   </div>
@@ -111,7 +113,7 @@ function vHome(V){
    <div><b>2. Add to cart</b><span>Pick sizes and quantities.</span></div>
    <div><b>3. Review</b><span>Adjust or remove items.</span></div>
    <div><b>4. Check out</b><span>Name, phone, address. We call or text to confirm.</span></div>
-   <div><b>5. Receive</b><span>Driver sends an ETA. Show ID, pay cash.</span></div>
+   <div><b>5. Receive</b><span>Driver sends an ETA. Show ID, pay with cash, Cash App or card.</span></div>
   </div></div>`;
 }
 function vAreas(V){
@@ -142,7 +144,7 @@ function vAreas(V){
 
   <section class="wrap sa-rules">
    <div><b>$${base}</b><span>Minimum on every order, every city.</span></div>
-   <div><b>Cash</b><span>Pay your driver at the door. Exact change helps.</span></div>
+   <div><b>Pay</b><span>Cash, Cash App ($420Cargo) or card tap at the door.</span></div>
    <div><b>21+ ID</b><span>Meet your driver at their vehicle with a valid ID.</span></div>
    <div><b>Missed it?</b><span>Re-delivery fee of ${esc(D.settings.redeliver)}.</span></div>
   </section></div>`;
@@ -168,7 +170,7 @@ function zipChecker(variant){
    <a class="jz-back" href="#home" aria-label="Back to home">${ICONS.back}</a>
    <div class="jz-ill">${ICONS.route}</div>
    <h2 class="jz-title">Your Delivery, Your Way</h2>
-   <p class="jz-sub">Discreet home delivery across Metro Detroit.<br>Cash at the door, 21+ with ID.</p>
+   <p class="jz-sub">Discreet home delivery across Metro Detroit.<br>Cash, Cash App or card at the door, 21+ with ID.</p>
    <div class="jz-toggle" role="tablist" aria-label="Order type"><button type="button" role="tab" aria-selected="false" id="jz-pickup">Pickup</button><button type="button" role="tab" aria-selected="true" class="on">Delivery</button></div>
    <div class="jz-row"><span class="jz-pin">${ICONS.pin}</span><div><b>Add an address for delivery</b><small>Please enter your ZIP code &amp; enjoy delivery</small></div></div>
    <form class="jz-form" id="zipf" novalidate role="search"><label for="zip-in" class="sr">ZIP code</label>
@@ -302,7 +304,7 @@ function openCart(){
   saveCart();const sub=cartSub(),base=Number(D.settings.base_min),low=sub<base;
   $('#layer').innerHTML=`<div class="scrim" data-close></div><aside class="drawer" role="dialog" aria-label="Cart"><header><h2 style="font-size:30px">Your cart</h2><button class="x" data-close aria-label="Close">×</button></header>
    <div class="body">${cart.length?cart.map((x,i)=>{const p=prod(x.id);return`<div class="line"><div class="th">${art(p)}</div><div><div style="font-size:14px">${esc(p.name)}</div>${x.opt?`<div class="note">${esc(x.opt)}</div>`:''}<div class="note num">${money(itemPrice(p,x.opt))}</div></div><div class="qty"><button data-cq="${i}" data-d="-1" aria-label="Less">−</button><span class="num">${x.qty}</span><button data-cq="${i}" data-d="1" aria-label="More">+</button></div></div>`}).join(''):'<p class="note">Your cart is empty. Tap a category on the home page to start.</p>'}</div>
-   ${cart.length?`<div class="totals"><div><span>Subtotal</span><span class="num">${money(sub)}</span></div>${low?`<div class="warnbox">Add ${money(base-sub)} more. We don't deliver orders under $${base}.</div>`:''}${!D.settings.open?'<div class="warnbox">We are closed right now.</div>':''}<button class="btn" data-go="checkout" ${low||!D.settings.open?'disabled':''}>Check out · cash on delivery</button></div>`:''}
+   ${cart.length?`<div class="totals"><div><span>Subtotal</span><span class="num">${money(sub)}</span></div>${low?`<div class="warnbox">Add ${money(base-sub)} more. We don't deliver orders under $${base}.</div>`:''}${!D.settings.open?'<div class="warnbox">We are closed right now.</div>':''}<button class="btn" data-go="checkout" ${low||!D.settings.open?'disabled':''}>Check out · pay at the door</button></div>`:''}
   </aside>`;
 }
 
@@ -316,7 +318,7 @@ async function refreshQuote(){
 }
 function vCheckout(V){
   if(!cart.length){location.hash='#shop';return}
-  V.innerHTML=`<div class="wrap page"><h1>Checkout</h1><p class="lede">Cash on delivery only. We'll call or text to confirm, then your driver sends an ETA.</p>
+  V.innerHTML=`<div class="wrap page"><h1>Checkout</h1><p class="lede">Pay at the door with cash, Cash App (<b>$420Cargo</b>) or card tap. We'll call or text to confirm, then your driver sends an ETA.</p>
   <div class="checkout"><form class="form" id="cof" novalidate>
    <div class="two"><label>Full name<input id="co-name" required autocomplete="name" value="${esc(co.name)}"></label>
    <label>Mobile number<input id="co-phone" required inputmode="tel" autocomplete="tel" placeholder="(313) 555-0100" value="${esc(co.phone)}"></label></div>
@@ -325,7 +327,8 @@ function vCheckout(V){
    <div id="co-gift"></div>
    <label>Delivery notes (optional)<textarea id="co-notes" rows="2" maxlength="300" placeholder="Gate code, parking, best way to reach you">${esc(co.notes)}</textarea></label>
    <label>Referral code (optional)<input id="co-ref" autocomplete="off" maxlength="8" style="text-transform:uppercase;font-family:var(--f-mono);letter-spacing:.12em" placeholder="ABCDE" value="${esc(co.ref||store.get('c420ref','')||'')}"></label>
-   <label class="check"><input type="checkbox" id="co-age"> <span>I'm 21 or older and will show a valid government ID to the driver. I'll meet the driver at their vehicle with cash ready.</span></label>
+   <div class="paypick"><span class="eyebrow">How will you pay at the door?</span><div class="payopts">${PAYS.map(x=>`<button type="button" class="payopt${(co.pay||'cash')===x.id?' on':''}" data-pay="${x.id}"><b>${x.label}</b><small>${x.sub}</small></button>`).join('')}</div></div>
+   <label class="check"><input type="checkbox" id="co-age"> <span>I'm 21 or older and will show a valid government ID to the driver. I'll meet the driver at their vehicle with payment ready.</span></label>
    <div id="co-err" class="warnbox" hidden></div>
    <button class="btn" type="submit" id="co-submit" style="justify-self:start;font-size:17px;padding:12px 24px">Place order</button>
    <p class="note">Missed deliveries carry a re-delivery fee of ${esc(D.settings.redeliver)}. Your city not listed? <a href="#areas">See our service area</a>.</p>
@@ -348,24 +351,24 @@ function drawSummary(){
    <div><span>Delivery${Q.zone_min!=null?` ($${Number(Q.zone_min)} city minimum)`:''}</span><span class="num">${Q.fee?money(Q.fee):(Q.zone_min!=null?'Free':'Pick a city')}</span></div>
    ${Number(Q.ref_discount)?`<div style="color:var(--green)"><span>Referral discount</span><span class="num">−${money(Q.ref_discount)}</span></div>`:''}
    ${Number(Q.credit_used)?`<div style="color:var(--green)"><span>Your referral credit</span><span class="num">−${money(Q.credit_used)}</span></div>`:''}
-   <div class="grand"><span>Cash due at door</span><span class="num">${money(Q.total)}</span></div></div>
+   <div class="grand"><span>Due at the door</span><span class="num">${money(Q.total)}</span></div></div>
    ${Q.fee&&Q.zone_min!=null?`<p class="note">Add ${money(Q.zone_min-(Q.subtotal-Q.discount))} more to reach your city's $${Number(Q.zone_min)} minimum and skip the fee.</p>`:''}
    ${!Q.tier&&D.tiers.length?`<p class="note">Members save ${Math.min(...D.tiers.map(t=>t.pct_off))}–${Math.max(...D.tiers.map(t=>t.pct_off))}%. Enter the phone on your membership to apply it.</p>`:''}
    ${Q.ref_error?`<div class="warnbox">${esc(Q.ref_error)}</div>`:''}
    ${Q.errors.length?`<div class="warnbox">${esc(Q.errors[0])}</div>`:''}`;
-  const b=$('#co-submit');if(b)b.textContent=`Place order · ${money(Q.total)} cash`;
+  const b=$('#co-submit');if(b)b.textContent=`Place order · ${money(Q.total)}`;
 }
-function readCo(){const gs=$('#co-giftsel');co={ref:($('#co-ref')?.value||'').trim().toUpperCase(),gift:gs?gs.value:'',name:$('#co-name').value.trim(),phone:$('#co-phone').value.trim(),address:$('#co-address').value.trim(),city:$('#co-city').value,notes:$('#co-notes').value.trim(),age:$('#co-age').checked};store.set('c420co',{...co,age:undefined})}
+function readCo(){const gs=$('#co-giftsel');co={pay:co.pay||'cash',ref:($('#co-ref')?.value||'').trim().toUpperCase(),gift:gs?gs.value:'',name:$('#co-name').value.trim(),phone:$('#co-phone').value.trim(),address:$('#co-address').value.trim(),city:$('#co-city').value,notes:$('#co-notes').value.trim(),age:$('#co-age').checked};store.set('c420co',{...co,age:undefined})}
 async function placeOrder(){
   if(placing)return;readCo();const e=$('#co-err');e.hidden=true;
   const miss=[];if(!co.name)miss.push('your name');if(co.phone.replace(/\D/g,'').length<10)miss.push('a 10-digit mobile number');if(!co.address)miss.push('your street address');if(!co.city)miss.push('your city');
   if(miss.length){e.hidden=false;e.textContent='Please add '+miss.join(', ')+'.';return}
   if(!co.age){e.hidden=false;e.textContent='Confirm you are 21+ and will show ID at delivery.';return}
   placing=true;const b=$('#co-submit');b.disabled=true;b.textContent='Placing order…';
-  const {data,error}=await sb.rpc('checkout',{p_ref:co.ref||null,p_items:cart,p_name:co.name,p_phone:co.phone,p_address:co.address,p_city:co.city,p_notes:[co.gift?'FREE: '+co.gift:'',co.notes].filter(Boolean).join(' · '),p_age_ok:co.age});
+  const {data,error}=await sb.rpc('checkout',{p_ref:co.ref||null,p_items:cart,p_name:co.name,p_phone:co.phone,p_address:co.address,p_city:co.city,p_notes:['PAY: '+payLabel(co.pay),co.gift?'FREE: '+co.gift:'',co.notes].filter(Boolean).join(' · '),p_age_ok:co.age});
   placing=false;
   if(error){e.hidden=false;e.textContent=errMsg(error);b.disabled=false;refreshQuote();return}
-  store.set('c420last',{...data,name:co.name,phone:co.phone});try{localStorage.removeItem('c420ref')}catch(e){};co.ref='';store.set('c420co',{...co,age:undefined});cart=[];saveCart();
+  store.set('c420last',{...data,name:co.name,phone:co.phone,pay:co.pay||'cash'});try{localStorage.removeItem('c420ref')}catch(e){};co.ref='';store.set('c420co',{...co,age:undefined});cart=[];saveCart();
   loadAll().catch(()=>{});location.hash='#done';
 }
 function vDone(V){
@@ -375,8 +378,9 @@ function vDone(V){
   ${Number(o.free_win)?`<div class="winner"><small>🎉 Order #${esc(o.code)}</small><b>You hit the 420!</b><span>We took ${money(o.free_win)} off this order. Every order number ending in 420 is free, up to $${Number(D.promo?.win_cap||100)}.</span></div>`:''}
   <span class="eyebrow">Order received</span><h1>Thanks, ${esc(o.name.split(' ')[0])}</h1>
   <p class="lede">Order <b class="mono">${esc(o.code)}</b> is in. We'll call or text ${esc(o.phone)} to confirm, then your driver will send an ETA.</p>
-  <div class="summary" style="max-width:480px">${Number(o.ref_discount)||Number(o.credit_used)?`<p class="note" style="margin:0;color:var(--green)">${Number(o.ref_discount)?`Referral −${money(o.ref_discount)}. `:''}${Number(o.credit_used)?`Credit −${money(o.credit_used)}.`:''}</p>`:''}<div class="totals"><div class="grand"><span>Have this cash ready</span><span class="num">${money(o.total)}</span></div></div>
-  <p class="note" style="margin:0">Meet your driver at their vehicle with a valid 21+ ID. Exact change helps.</p></div>
+  <div class="summary" style="max-width:480px">${Number(o.ref_discount)||Number(o.credit_used)?`<p class="note" style="margin:0;color:var(--green)">${Number(o.ref_discount)?`Referral −${money(o.ref_discount)}. `:''}${Number(o.credit_used)?`Credit −${money(o.credit_used)}.`:''}</p>`:''}<div class="totals"><div class="grand"><span>Due at the door · ${esc(payLabel(o.pay))}</span><span class="num">${money(o.total)}</span></div></div>
+  ${o.pay==='cashapp'?`<p class="note" style="margin:0">When your driver arrives, send ${money(o.total)} to <b>$420Cargo</b> on Cash App and show the payment screen.</p><a class="btn cashapp" href="https://cash.app/$420Cargo/${Number(o.total).toFixed(2)}" target="_blank" rel="noopener">Open Cash App · $420Cargo</a>`:o.pay==='card'?`<p class="note" style="margin:0">Your driver will have a Square reader. Tap your card or phone to pay.</p>`:`<p class="note" style="margin:0">Exact change helps.</p>`}
+  <p class="note" style="margin:0">Meet your driver at their vehicle with a valid 21+ ID.</p></div>
   ${o.my_code?`<div class="refbox"><div><small>Your referral code</small><b class="mono">${esc(o.my_code)}</b></div><p>Give friends $${Number(o.ref_new||10)} off their first order. You get $${Number(o.ref_reward||10)} credit when it's delivered, applied to your next order automatically.</p><div class="row"><button class="btn" id="copyref" data-link="${esc(link)}">Copy my link</button><span class="note mono" id="reflink">${esc(link)}</span></div></div>`:''}
   <p style="margin-top:22px"><a class="btn ghost" href="#shop" style="text-decoration:none">Back to the menu</a></p></div>`;
 }
@@ -449,7 +453,7 @@ function drawDrop(p,tickOnly){
      :st==='early'?`<div class="dr-early"><b>${esc(tierName(p.early_tier))} members: you're in.</b> Early access is open now. Use the phone number on your membership at checkout.</div><button class="btn dr-cop" id="copit" data-cop="${p.id}">Cop it early · ${money(p.price)}</button>`
      :st==='soon'?`<a class="btn ghost dr-cal" href="${gcalLink(p)}" target="_blank" rel="noopener">Add a reminder to my calendar</a>${p.early_tier&&p.early_minutes?`<p class="note">${esc(tierName(p.early_tier))} members get in ${p.early_minutes} minutes early. <a href="#members">See membership</a>.</p>`:''}`
      :`<a class="btn ghost" href="#shop" style="text-decoration:none">Shop the menu</a>`}
-    <ul class="dr-rules"><li>Limit ${p.drop_limit||1} per customer, by phone number</li><li>Cash on delivery, ${money(D.settings.base_min||0)} minimum still applies</li><li>Numbered and never restocked</li><li>Referral card in every bag</li></ul>
+    <ul class="dr-rules"><li>Limit ${p.drop_limit||1} per customer, by phone number</li><li>Pay at the door (cash, Cash App or card), ${money(D.settings.base_min||0)} minimum still applies</li><li>Numbered and never restocked</li><li>Referral card in every bag</li></ul>
    </div>
   </div>
   ${past.length?`<h2 class="dr-past-h">Past drops</h2><div class="dr-past">${past.map(x=>`<div><span class="mono">${dropNo(x)}</span><b>${esc(x.name)}</b><small>${x.sold_out_at?'Sold out in '+sellTime(x):'Sold out'}</small></div>`).join('')}</div>`:''}`;
@@ -465,22 +469,22 @@ async function copIt(id){
 /* ---------- membership ---------- */
 function vMembers(V){
   V.innerHTML=`<div class="wrap page"><span class="eyebrow">Private membership</span><h1>Join the club</h1>
-  <p class="lede">Monthly membership, paid in cash with any delivery. Apply below. We review every application and confirm by phone, then your discount applies automatically at checkout.</p>
-  <div class="tiers">${D.tiers.map((t,i)=>`<div class="tier ${i===1?'hot':''}"><span class="eyebrow">${i===1?'Most popular':'Tier '+(i+1)}</span><h3>${esc(t.name)}</h3><div class="price">$${Number(t.price)}<small> / month, cash</small></div><ul>${t.perks.map(p=>`<li>${esc(p)}</li>`).join('')}</ul><button class="btn ${i===1?'':'ghost'}" data-tier="${t.id}">Apply for ${esc(t.name)}</button></div>`).join('')}</div>
+  <p class="lede">Monthly membership, paid at the door with any delivery (cash, Cash App or card). Apply below. We review every application and confirm by phone, then your discount applies automatically at checkout.</p>
+  <div class="tiers">${D.tiers.map((t,i)=>`<div class="tier ${i===1?'hot':''}"><span class="eyebrow">${i===1?'Most popular':'Tier '+(i+1)}</span><h3>${esc(t.name)}</h3><div class="price">$${Number(t.price)}<small> / month</small></div><ul>${t.perks.map(p=>`<li>${esc(p)}</li>`).join('')}</ul><button class="btn ${i===1?'':'ghost'}" data-tier="${t.id}">Apply for ${esc(t.name)}</button></div>`).join('')}</div>
   <form class="form" id="memf" novalidate><h2 style="font-size:30px">Membership application</h2>
    <div class="two"><label>Full name<input id="m-name" required autocomplete="name"></label><label>Mobile number<input id="m-phone" inputmode="tel" autocomplete="tel" required placeholder="(313) 555-0100"></label></div>
    <label>Tier<select id="m-tier">${D.tiers.map(t=>`<option value="${t.id}">${esc(t.name)} · $${Number(t.price)}/mo</option>`).join('')}</select></label>
-   <label class="check"><input type="checkbox" id="m-age"> <span>I'm 21+ and understand dues are paid in cash to my driver each month.</span></label>
+   <label class="check"><input type="checkbox" id="m-age"> <span>I'm 21+ and understand dues are paid to my driver each month.</span></label>
    <div id="m-err" class="warnbox" hidden></div>
    <button class="btn" type="submit" style="justify-self:start">Submit application</button></form></div>`;
 }
 async function applyMember(f){
   const name=$('#m-name').value.trim(),ph=$('#m-phone').value,err=$('#m-err');err.hidden=true;
   if(!name||ph.replace(/\D/g,'').length<10){err.hidden=false;err.textContent='Add your name and a 10-digit mobile number.';return}
-  if(!$('#m-age').checked){err.hidden=false;err.textContent='Confirm you are 21+ and agree to monthly cash dues.';return}
+  if(!$('#m-age').checked){err.hidden=false;err.textContent='Confirm you are 21+ and agree to monthly dues.';return}
   const {data,error}=await sb.rpc('apply_membership',{p_name:name,p_phone:ph,p_tier:$('#m-tier').value});
   if(error){err.hidden=false;err.textContent=errMsg(error);return}
-  f.innerHTML=`<h2 style="font-size:30px">Application received</h2><p class="lede" style="margin:0">Thanks, ${esc(name.split(' ')[0])}. We'll call ${esc(data.phone)} to confirm. Your first month is collected in cash with your next delivery.</p>`;
+  f.innerHTML=`<h2 style="font-size:30px">Application received</h2><p class="lede" style="margin:0">Thanks, ${esc(name.split(' ')[0])}. We'll call ${esc(data.phone)} to confirm. Your first month is collected with your next delivery.</p>`;
 }
 
 /* ---------- events ---------- */
@@ -519,6 +523,7 @@ document.addEventListener('click',e=>{
   if(t.dataset.go){$('#layer').innerHTML='';location.hash='#'+t.dataset.go;return}
   if(t.dataset.tier){$('#m-tier').value=t.dataset.tier;$('#memf').scrollIntoView({behavior:'smooth'});$('#m-name').focus({preventScroll:true});return}
   if(t.dataset.rsvp){rsvp(t.dataset.rsvp);return}
+  if(t.dataset.pay){co.pay=t.dataset.pay;store.set('c420co',{...co,age:undefined});document.querySelectorAll('.payopt').forEach(b=>b.classList.toggle('on',b.dataset.pay===co.pay));return}
   if(t.dataset.cop){copIt(t.dataset.cop);return}
   if(t.id==='zipchip'){openZipModal();return}
   if(t.id==='copyref'){const l=t.dataset.link,msg=`Get $${Number(D.promo?.ref_new||10)} off your first Cargo+420 delivery: ${l}`;(navigator.share?navigator.share({text:msg}).catch(()=>{}):navigator.clipboard?.writeText(msg).then(()=>toast('Link copied','Send it to a friend.',true)).catch(()=>{}));return}
