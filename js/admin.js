@@ -6,6 +6,9 @@ const ago=ts=>{const m=Math.round((Date.now()-new Date(ts))/60000);if(m<1)return
 const tierName=id=>(A.tiers.find(t=>t.id===id)||{name:id}).name;
 const drvName=id=>(A.drivers.find(d=>d.id===id)||{}).name||'';
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let ROLE='owner',ROLE_NAME='';
+const ROLE_TABS={owner:null,inventory:['inventory','drops'],marketing:['drops','events','customers','reports']};
+const ROLE_LABEL={owner:'Owner',driver:'Driver',marketing:'Marketing',inventory:'Inventory'};
 let custQuiet=false,tab='orders',ordFilter='active',custQ='',invQ='',flashIds=new Set(),user=null,channel=null;
 const V=()=>$('#view');
 
@@ -62,15 +65,17 @@ function chime(){if(!actx)return;try{const t=actx.currentTime;[880,1320,1760].fo
 function vAuth(mode='in',msg=''){
   $('#signout').hidden=true;
   V().innerHTML=`<form class="authbox" id="authf" data-mode="${mode}"><img src="img/logo.webp" alt="">
-   <h1 style="font-size:34px;text-align:center">${mode==='up'?'Create owner account':mode==='reset'?'Reset password':mode==='newpw'?'Set a new password':'Owner sign in'}</h1>
+   <h1 style="font-size:34px;text-align:center">${mode==='up'?'Create your account':mode==='reset'?'Reset password':mode==='newpw'?'Set a new password':'Team sign in'}</h1>
+   ${mode==='up'?'<label>Your name<input id="a-name" autocomplete="name" required></label>':''}
    ${mode!=='newpw'?'<label>Email<input id="a-email" type="email" autocomplete="username" required></label>':''}
    ${mode!=='reset'?`<label>Password<input id="a-pw" type="password" autocomplete="${mode==='in'?'current-password':'new-password'}" minlength="8" required></label>`:''}
+   ${mode==='up'?`<label>Your role<select id="a-role" required><option value="">Choose your role</option><option value="driver">Driver</option><option value="inventory">Inventory</option><option value="marketing">Marketing</option><option value="owner">Owner</option></select></label>`:''}
    <button class="btn">${mode==='up'?'Create account':mode==='reset'?'Email me a reset link':mode==='newpw'?'Save password':'Sign in'}</button>
    ${msg?`<p class="warnbox">${esc(msg)}</p>`:''}
    <div class="row" style="justify-content:space-between">
-    ${mode==='in'?'<button type="button" class="linkbtn" data-auth="reset">Forgot password?</button><button type="button" class="linkbtn" data-auth="up">First time? Create the owner account</button>':'<button type="button" class="linkbtn" data-auth="in">Back to sign in</button>'}
+    ${mode==='in'?'<button type="button" class="linkbtn" data-auth="reset">Forgot password?</button><button type="button" class="linkbtn" data-auth="up">New team member? Create an account</button>':'<button type="button" class="linkbtn" data-auth="in">Back to sign in</button>'}
    </div>
-   ${mode==='up'?'<p class="note">The first account created becomes the owner. Accounts made after that have no access until you add them.</p>':''}
+   ${mode==='up'?'<p class="note">Your role is a request. An owner approves it under Settings → Team before you can see anything.</p>':''}
   </form>`;
 }
 async function submitAuth(f){
@@ -78,8 +83,9 @@ async function submitAuth(f){
   const btn=f.querySelector('.btn');btn.disabled=true;
   let r;
   if(mode==='in')r=await sb.auth.signInWithPassword({email,password:pw});
-  if(mode==='up'){r=await sb.auth.signUp({email,password:pw,options:{emailRedirectTo:location.origin+'/admin.html'}});
-    if(!r.error&&!r.data.session){return vAuth('in','Check your email and tap the confirmation link, then sign in here.')}}
+  if(mode==='up'){const role=$('#a-role').value,name=($('#a-name').value||'').trim();if(!role||!name){btn.disabled=false;return vAuth('up','Add your name and choose your role.')}
+    r=await sb.auth.signUp({email,password:pw,options:{emailRedirectTo:location.origin+'/admin.html',data:{name,role}}});
+    if(!r.error&&!r.data.session){return vAuth('in',`Check your email and tap the confirmation link, then sign in. An owner will approve your ${ROLE_LABEL[role]} access.`)}}
   if(mode==='reset'){r=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/admin.html'});if(!r.error)return vAuth('in','If that email has an account, a reset link is on its way.')}
   if(mode==='newpw'){r=await sb.auth.updateUser({password:pw});if(!r.error){toast('Password updated','',true);return boot()}}
   btn.disabled=false;
@@ -151,16 +157,18 @@ async function render(){
   const street=A.orders.filter(o=>o.status==='out'&&isCash(o)).reduce((s,o)=>s+Number(o.total),0)+A.orders.filter(o=>o.status==='delivered'&&!o.cash_in&&isCash(o)).reduce((s,o)=>s+Number(o.collected??o.total),0);
   const nNew=A.orders.filter(o=>o.status==='new').length,pend=A.members.filter(m=>m.status==='pending').length,low=A.products.filter(p=>p.active&&p.cat!=='drop'&&p.stock<=3).length;
   const liveDrop=A.products.some(p=>p.cat==='drop'&&p.active&&p.stock>0&&p.drop_at&&new Date(p.drop_at)<=new Date())?'LIVE':0;
-  const tabs=[['orders','Orders',nNew],['customers','Customers'],['drivers','Drivers & cash'],['inventory','Inventory',low],['drops','Drops',liveDrop],['members','Members',pend],['events','Events'],['reports','Reports'],['settings','Settings']];
-  const ps=await pushState();
+  let tabs=[['orders','Orders',nNew],['customers','Customers'],['drivers','Drivers & cash'],['inventory','Inventory',low],['drops','Drops',liveDrop],['members','Members',pend],['events','Events'],['reports','Reports'],['settings','Settings']];
+  if(ROLE_TABS[ROLE]){tabs=tabs.filter(t=>ROLE_TABS[ROLE].includes(t[0]));if(!ROLE_TABS[ROLE].includes(tab))tab=ROLE_TABS[ROLE][0]}
+  const owner=ROLE==='owner';
+  const ps=owner?await pushState():null;
   const focus=document.activeElement?.id;
   V().innerHTML=`<div class="wrap adm">
-   <div class="admtop"><div><span class="eyebrow">Cargo+420 · Owner dashboard</span><h1 style="font-size:40px">${tab==='orders'?'Live orders':tabs.find(t=>t[0]===tab)[1]}</h1></div>
+   <div class="admtop"><div><span class="eyebrow">Cargo+420 · ${ROLE_LABEL[ROLE]} dashboard${ROLE_NAME?' · '+esc(ROLE_NAME):''}</span><h1 style="font-size:40px">${tab==='orders'?'Live orders':tabs.find(t=>t[0]===tab)[1]}</h1></div>
     <div class="row"><span class="live"><i style="${liveOk?'':'background:var(--warn)'}"></i><span id="livetxt">${liveOk?'Live':'Connecting…'}</span></span>
-     <button class="btn sm ${A.settings.open?'green':'red'}" id="openbtn">${A.settings.open?'Taking orders':'Closed · not taking orders'}</button></div></div>
-   ${alertCard(ps)}
-   ${tab==='orders'?ytdBar():''}
-   <div class="kpis">
+     ${owner?`<button class="btn sm ${A.settings.open?'green':'red'}" id="openbtn">${A.settings.open?'Taking orders':'Closed · not taking orders'}</button>`:''}</div></div>
+   ${owner?alertCard(ps):''}
+   ${owner&&tab==='orders'?ytdBar():''}
+   <div class="kpis" ${owner?'':'hidden'}>
     <div class="kpi"><div class="l">Today's sales (collected)</div><div class="v">${money(sales)}</div></div>
     <div class="kpi"><div class="l">Orders today</div><div class="v">${today.length}</div></div>
     <div class="kpi"><div class="l">Avg ticket</div><div class="v">${money(today.length?today.reduce((s,o)=>s+Number(o.total),0)/today.length:0)}</div></div>
@@ -169,6 +177,8 @@ async function render(){
    <div class="tabs" role="tablist">${tabs.map(([id,l,b])=>`<button role="tab" class="${tab===id?'on':''}" data-tab="${id}">${l}${b?`<span class="b">${b}</span>`:''}</button>`).join('')}</div>
    <div id="admbody"></div></div>`;
   ({orders:aOrders,customers:aCustomers,drivers:aDrivers,inventory:aInventory,drops:aDrops,members:aMembers,events:aEvents,reports:aReports,settings:aSettings}[tab])($('#admbody'));
+  if(!owner)document.querySelectorAll('#admbody [data-cnote],#admbody [data-idv]').forEach(e=>e.disabled=true);
+  if(owner&&tab==='settings')loadTeam();
   if(focus&&$('#'+focus)){const el=$('#'+focus);el.focus();if(el.setSelectionRange&&typeof el.value==='string')try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}
 }
 function alertCard(ps){
@@ -397,7 +407,7 @@ function downloadCsv(which){
 }
 /* ---------- settings ---------- */
 function aSettings(B){
-  B.innerHTML=`<form class="form" id="setf" style="max-width:820px"><h2 style="font-size:26px">Store</h2>
+  B.innerHTML=`<section class="team" id="teamwrap"><p class="note">Loading team…</p></section><form class="form" id="setf" style="max-width:820px"><h2 style="font-size:26px">Store</h2>
    <div class="two"><label>Delivery hours (shown on the site)<input id="s-hours" value="${esc(A.settings.hours)}"></label><label>Minimum order, every city ($)<input id="s-base" type="number" min="0" value="${Number(A.settings.base_min)}"></label></div>
    <label>Re-delivery fee wording<input id="s-redel" value="${esc(A.settings.redeliver)}"></label>
    <h2 style="font-size:26px;margin-top:10px">Delivery zones</h2><p class="note" style="margin:0">If an order is under the zone minimum, the fee is added. Cities are comma separated and show in the checkout city list.</p>
@@ -498,7 +508,10 @@ async function bootInner(){
   if(!session){user=null;return vAuth('in')}
   user=session.user;
   const {data:ok}=await sb.rpc('is_admin');
-  if(!ok){const {data:drv}=await sb.rpc('my_driver');if(drv&&drv.id)return driverBoot(drv);V().innerHTML=`<div class="authbox"><h1 style="font-size:30px">No owner access</h1><p class="note">${esc(user.email)} is signed in but isn't set up as an owner. Ask the owner to add this account.</p><button class="btn ghost" id="signout2">Sign out</button></div>`;$('#signout2').onclick=async()=>{await sb.auth.signOut();location.reload()};return}
+  if(!ok){const {data:me}=await sb.rpc('my_role');
+    if(me&&me.role==='driver')return driverBoot({id:me.id,name:me.name});
+    if(me&&ROLE_TABS[me.role]){ROLE=me.role;ROLE_NAME=me.name||'';if(!ROLE_TABS[ROLE].includes(tab))tab=ROLE_TABS[ROLE][0];$('#signout').hidden=false;try{await reloadData();subscribe()}catch(e){V().innerHTML=`<div class="wrap loading">Couldn't load the dashboard. ${esc(errMsg(e))}</div>`}return}
+    if(me&&me.role==='pending'){$('#signout').hidden=false;V().innerHTML=`<div class="authbox"><img src="img/logo.webp" alt=""><h1 style="font-size:30px;text-align:center">${me.status==='declined'?'Request declined':'Waiting for approval'}</h1><p class="note" style="text-align:center">${esc(user.email)} asked for <b>${esc(ROLE_LABEL[me.requested]||me.requested)}</b> access. ${me.status==='declined'?'An owner declined this request. Talk to your manager.':'An owner needs to approve it under Settings → Team. Refresh this page once they do.'}</p><button class="btn ghost" onclick="location.reload()">Refresh</button></div>`;return}V().innerHTML=`<div class="authbox"><h1 style="font-size:30px">No owner access</h1><p class="note">${esc(user.email)} is signed in but isn't set up as an owner. Ask the owner to add this account.</p><button class="btn ghost" id="signout2">Sign out</button></div>`;$('#signout2').onclick=async()=>{await sb.auth.signOut();location.reload()};return}
   $('#signout').hidden=false;
   try{await reloadData();subscribe()}catch(e){V().innerHTML=`<div class="wrap loading">Couldn't load the dashboard. ${esc(errMsg(e))}</div>`}
 }
@@ -567,3 +580,36 @@ document.addEventListener('click',async e=>{
     drvLoad();
   }
 });
+
+/* ================= TEAM (owner) ================= */
+const roleSel=(cur,attr)=>`<select ${attr}>${['owner','driver','inventory','marketing'].map(r=>`<option value="${r}" ${r===cur?'selected':''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`;
+async function loadTeam(){
+  const w=$('#teamwrap');if(!w)return;
+  const {data:T,error}=await sb.rpc('team_list');if(!$('#teamwrap'))return;
+  if(error){w.innerHTML=`<p class="warnbox">${esc(errMsg(error))}</p>`;return}
+  const people=[...T.owners.map(o=>({email:o.email,role:'owner',me:o.me})),...T.drivers.map(d=>({email:d.email,name:d.name,role:'driver'})),...T.staff.map(x=>({email:x.email,name:x.name,role:x.role}))];
+  w.innerHTML=`<h2 style="font-size:26px">Team</h2>
+   <p class="note" style="margin:0">Owner: everything. Driver: driver screen only. Inventory: Inventory &amp; Drops. Marketing: Drops, Events, Customers (view) &amp; Reports.</p>
+   ${T.requests.length?`<h3 class="tm-h">Waiting for approval <span class="b">${T.requests.length}</span></h3><div class="tm-list">${T.requests.map(r=>`<div class="tm-row req"><div><b>${esc(r.name||r.email)}</b><small>${esc(r.email)} · asked for ${esc(ROLE_LABEL[r.role])}${r.confirmed?'':' · email not confirmed yet'}</small></div><div class="tm-acts">${roleSel(r.role,`data-treqrole="${r.id}"`)}<button class="btn green sm" data-tapprove="${esc(r.email)}" data-rid="${r.id}" data-name="${esc(r.name||'')}">Approve</button><button class="btn red sm" data-tdecline="${r.id}">Decline</button></div></div>`).join('')}</div>`:''}
+   <h3 class="tm-h">People with access</h3>
+   <div class="tm-list">${people.map(x=>`<div class="tm-row"><div><b>${esc(x.name||x.email)}</b><small>${esc(x.email)}${x.me?' · you':''}</small></div><div class="tm-acts">${x.me?`<span class="pill p-new">Owner</span>`:`${roleSel(x.role,`data-tsetrole="${esc(x.email)}"`)}<button class="linkbtn" data-tremove="${esc(x.email)}">${pendRemove===x.email?'Tap again to remove':'Remove'}</button>`}</div></div>`).join('')}</div>
+   <form class="tm-add" id="teamf"><input id="tm-email" type="email" placeholder="Email" required><input id="tm-name" placeholder="Name"><select id="tm-role"><option value="driver">Driver</option><option value="inventory">Inventory</option><option value="marketing">Marketing</option><option value="owner">Owner</option></select><button class="btn sm">Add person</button></form>
+   <p class="note" style="margin:0">Adding someone by email gives them access as soon as they create an account with that email and confirm it.</p>`;
+}
+let pendRemove=null;
+async function teamSet(email,role,name){const {error}=await sb.rpc('team_set',{p_email:email,p_role:role,p_name:name||null});if(error){toast('Not saved',errMsg(error));return false}return true}
+document.addEventListener('click',async e=>{
+  if(ROLE!=='owner'||DRV)return;const t=e.target.closest('button');if(!t)return;
+  if(t.dataset.tapprove){const role=document.querySelector(`[data-treqrole="${t.dataset.rid}"]`).value;t.disabled=true;if(await teamSet(t.dataset.tapprove,role,t.dataset.name))toast('Approved',`${t.dataset.tapprove} now has ${ROLE_LABEL[role]} access.`,true);if(role==='driver')await reloadData();loadTeam();return}
+  if(t.dataset.tdecline){t.disabled=true;const {error}=await sb.rpc('team_decline',{p_id:t.dataset.tdecline});if(error)toast('Not saved',errMsg(error));else toast('Request declined','',true);loadTeam();return}
+  if(t.dataset.tremove){const em=t.dataset.tremove;if(pendRemove!==em){pendRemove=em;loadTeam();setTimeout(()=>{if(pendRemove===em){pendRemove=null;loadTeam()}},4000);return}pendRemove=null;if(await teamSet(em,'none'))toast('Access removed',em,true);loadTeam();return}
+});
+document.addEventListener('change',async e=>{
+  if(ROLE!=='owner'||DRV)return;const t=e.target;
+  if(t.dataset.tsetrole){if(await teamSet(t.dataset.tsetrole,t.value))toast('Role updated',`${t.dataset.tsetrole} → ${ROLE_LABEL[t.value]}`,true);if(t.value==='driver')await reloadData();loadTeam()}
+});
+document.addEventListener('submit',async e=>{
+  if(e.target.id!=='teamf')return;e.preventDefault();e.stopImmediatePropagation();
+  const em=$('#tm-email').value.trim(),role=$('#tm-role').value,nm=$('#tm-name').value.trim();if(!em)return;
+  if(await teamSet(em,role,nm)){toast('Person added',`${em} · ${ROLE_LABEL[role]}`,true);if(role==='driver')await reloadData();loadTeam()}
+},true);

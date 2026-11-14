@@ -104,7 +104,7 @@ function vHome(V){
    <a class="catbtn all" href="#shop">${ICONS.all}<span>Shop all</span><small>${shopItems().length} products</small></a>
   </nav>
   <div class="strip">
-   <div><b>Pay your way</b><p>Cash, Cash App (<b>$420Cargo</b>) or tap your card with Square when your driver arrives.</p></div>
+   <div><b>Pay your way</b><p>Cash, Cash App <span class="cashtag">$420Cargo</span> or tap your card with Square when your driver arrives.</p></div>
    <div><b>21+ with ID</b><p>Meet your driver at their vehicle with a valid government ID.</p></div>
    <div><b>Members save up to ${Math.max(0,...D.tiers.map(t=>t.pct_off))}%</b><p>${D.tiers.map(t=>t.name).join(', ')}. <a href="#members">See membership</a>.</p></div>
   </div>
