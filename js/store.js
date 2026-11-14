@@ -32,7 +32,7 @@ let route='home',shopFilter={type:'all',val:null},sortBy='newest',q='';
 function go(){
   const h=(location.hash||'#home').slice(1);
   route=['home','shop','drop','specials','members','events','areas','checkout','done'].includes(h)?h:'home';
-  if(CATS.some(c=>c.id===h)){route='shop';shopFilter={type:'cat',val:h}}
+  if(CATS.some(c=>c.id===h)){route='shop';shopFilter={type:'cat',val:h};q='';const hi=$('#hq');if(hi)hi.value=''}
   render();window.scrollTo(0,0);
 }
 window.addEventListener('hashchange',()=>{$('#nav').classList.remove('open');$('#menubtn')?.setAttribute('aria-expanded','false');go()});
@@ -42,6 +42,7 @@ function render(){
   if(!D.settings.open){b.className='banner closed';b.textContent='We are closed right now and not taking orders. Hours: '+D.settings.hours}
   else{b.className='banner';b.textContent=`Cash on delivery only · $${Number(D.settings.base_min)} minimum on every order · Valid 21+ ID checked at delivery · Hours ${D.settings.hours}`}
   stopDropTimers();
+  drawCatbar();
   ({home:vHome,shop:vShop,drop:vDrop,specials:vSpecials,members:vMembers,events:vEvents,areas:vAreas,checkout:vCheckout,done:vDone}[route])($('#view'));
   saveCart();
 }
@@ -267,7 +268,7 @@ function vShop(V){
    <section>
     <div class="shophead"><span class="count">${list.length} products${shopFilter.type!=='all'?` · <b>${esc(filterLabel())}</b>`:''}</span>
      <button class="filterbtn" id="filterbtn" type="button">Filter &amp; Sort</button>
-     <div class="row deskonly"><input id="shopq" type="search" placeholder="Search menu" value="${esc(q)}" aria-label="Search menu">
+     <div class="row deskonly">
      <label class="row" style="color:var(--muted)">Sort by:<select id="sort"><option value="newest">Newest</option><option value="low">Price, low to high</option><option value="high">Price, high to low</option><option value="name">Name A–Z</option></select></label></div></div>
     <div class="grid">${list.map(p=>`<div class="card"><button class="img" data-p="${p.id}" aria-label="${esc(p.name)} details">${p.featured?'<span class="tag">Hot</span>':''}${art(p)}</button><button class="nm" data-p="${p.id}">${esc(p.name)}</button><div class="pr ${p.stock<=0?'oos':''}">${p.stock<=0?'Out of stock':fromPrice(p)}${p.size?` <span>· ${esc(p.size)}</span>`:''}</div>
      ${p.stock>0&&choices(p)?`<div class="cardbuy"><button type="button" class="btn addbtn" data-p="${p.id}">Choose ${esc((p.options.name||'option').toLowerCase())}</button></div>`:p.stock>0?`<div class="cardbuy"><div class="cq"><button type="button" data-cq2="-1" aria-label="Less">−</button><span class="num">1</span><button type="button" data-cq2="1" data-max="${p.stock}" aria-label="More">+</button></div><button type="button" class="btn addbtn" data-quick="${p.id}">Add to cart</button></div>`:''}</div>`).join('')||'<p class="note">No products match. Try another category.</p>'}</div>
@@ -534,14 +535,38 @@ document.addEventListener('input',e=>{
   if(e.target.id==='shopq'){clearTimeout(qT);qT=setTimeout(()=>{q=e.target.value;vShop($('#view'));const i=$('#shopq');i.focus();i.setSelectionRange(q.length,q.length)},250)}
   if(e.target.id==='shopq2'){clearTimeout(qT);qT=setTimeout(()=>{q=e.target.value;vShop($('#view'))},250)}
 });
-document.addEventListener('submit',e=>{e.preventDefault();if(e.target.id==='cof')placeOrder();if(e.target.id==='memf')applyMember(e.target);if(e.target.id==='zipf')checkZip($('#zip-in').value)});
+document.addEventListener('submit',e=>{e.preventDefault();if(e.target.id==='hsearch'){hsGo($('#hq').value);return}if(e.target.id==='cof')placeOrder();if(e.target.id==='memf')applyMember(e.target);if(e.target.id==='zipf')checkZip($('#zip-in').value)});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#layer').innerHTML=''});
+
+/* ---------- header search + category bar ---------- */
+function drawCatbar(){
+  const el=$('#catbar .wrap');if(!el)return;
+  const cur=route!=='shop'?'':shopFilter.type==='cat'?shopFilter.val:shopFilter.type==='all'&&!q?'all':'';
+  const have=new Set(shopItems().map(p=>p.cat));
+  el.innerHTML=`<a href="#shop" data-catall="1" class="${cur==='all'?'on':''}">Shop all</a>`+CATS.filter(c=>have.has(c.id)).map(c=>`<a href="#${c.id}" class="${cur===c.id?'on':''}">${c.name}</a>`).join('')+`<a href="#specials" class="cb-sp">Specials</a>`;
+}
+function hsMatches(v){v=v.trim().toLowerCase();if(!v)return[];return shopItems().filter(p=>(p.name+' '+(p.tags||[]).join(' ')+' '+catName(p.cat)+' '+((choices(p)||[]).map(c=>c.label).join(' '))).toLowerCase().includes(v))}
+function drawSuggest(v){
+  const d=$('#hsdrop');if(!d)return;const m=hsMatches(v);
+  if(!v.trim()){d.hidden=true;return}
+  d.innerHTML=(m.length?m.slice(0,6).map(p=>`<button type="button" class="hs-row" data-p="${p.id}"><span class="hs-th">${art(p)}</span><span class="hs-tx"><b>${esc(p.name)}</b><small>${esc(catName(p.cat))} · ${p.stock<=0?'Out of stock':fromPrice(p)}</small></span></button>`).join('')+`<button type="submit" class="hs-all">See all ${m.length} result${m.length===1?'':'s'} →</button>`:`<p class="hs-none">No matches for “${esc(v)}”. Try a strain, brand or category.</p>`);
+  d.hidden=false;
+}
+function hsGo(v){q=v.trim();shopFilter={type:'all',val:null};$('#hsdrop').hidden=true;$('#hq').blur();if(route!=='shop')location.hash='#shop';else{vShop($('#view'));drawCatbar();window.scrollTo(0,0)}}
+let hsT;
+$('#hq')?.addEventListener('input',e=>{clearTimeout(hsT);const v=e.target.value;hsT=setTimeout(()=>{drawSuggest(v);if(route==='shop'){q=v.trim();vShop($('#view'));drawCatbar()}},120)});
+$('#hq')?.addEventListener('focus',e=>{if(e.target.value.trim())drawSuggest(e.target.value)});
+$('#hq')?.addEventListener('keydown',e=>{if(e.key==='Escape'){$('#hsdrop').hidden=true;e.target.blur()}if(e.key==='ArrowDown'){const f=document.querySelector('#hsdrop button');if(f){e.preventDefault();f.focus()}}});
+$('#hsdrop')?.addEventListener('keydown',e=>{const bs=[...document.querySelectorAll('#hsdrop button')],i=bs.indexOf(document.activeElement);if(e.key==='ArrowDown'&&i<bs.length-1){e.preventDefault();bs[i+1].focus()}if(e.key==='ArrowUp'){e.preventDefault();i>0?bs[i-1].focus():$('#hq').focus()}if(e.key==='Escape'){$('#hsdrop').hidden=true;$('#hq').focus()}});
+document.addEventListener('click',e=>{const f=$('#hsearch');if(f&&!f.contains(e.target))$('#hsdrop').hidden=true;if(e.target.closest('.hs-row'))$('#hsdrop').hidden=true;const a=e.target.closest('[data-catall]');if(a){shopFilter={type:'all',val:null};q='';const i=$('#hq');if(i)i.value='';if(route==='shop'){e.preventDefault();vShop($('#view'));drawCatbar();window.scrollTo(0,0)}}},true);
+function setHdr(){const t=document.querySelector('.top');if(t)document.documentElement.style.setProperty('--hdr',t.offsetHeight+'px')}
+window.addEventListener('resize',setHdr);
 
 /* ---------- age gate + boot ---------- */
 const gate=$('#gate');gate.hidden=store.get('c420age',0)===1;
 $('#gate-yes').onclick=()=>{store.set('c420age',1);gate.hidden=true};
 $('#gate-no').onclick=()=>{$('#gate-msg').hidden=false};
-loadAll().then(go).catch(err=>{$('#view').innerHTML=`<div class="wrap loading">We couldn't load the menu. Refresh the page to try again.<br><small>${esc(errMsg(err))}</small></div>`});
+loadAll().then(()=>{go();setHdr()}).catch(err=>{$('#view').innerHTML=`<div class="wrap loading">We couldn't load the menu. Refresh the page to try again.<br><small>${esc(errMsg(err))}</small></div>`});
 setInterval(()=>{if(route!=='home')return;const b=document.querySelector('.dropfeat');if(!b)return;const p=curDrop();if(!p)return;
   if(b.dataset.fst!==dropState(p)){const t=document.createElement('div');t.innerHTML=dropFeature();t.firstElementChild?b.replaceWith(t.firstElementChild):b.remove();return}
   const c=cd(dropT(p)-Date.now());b.querySelectorAll('[data-fu]').forEach(e=>e.textContent=c[e.dataset.fu])},1000);
