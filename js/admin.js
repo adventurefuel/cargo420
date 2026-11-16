@@ -435,6 +435,11 @@ function drawAnalytics(B,d){
   const pd=d.perf_device||{};
   B.innerHTML=`<div class="an" style="display:grid;gap:16px">
    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div class="seg">${[7,30,90].map(x=>`<button class="${aDays===x?'on':''}" data-adays="${x}">${x} days</button>`).join('')}</div><span class="note" style="margin:0"><span class="an-live"></span>${d.live_now} on the site now · ${d.today_visitors} visitors today <button class="linkbtn" data-arefresh="1">Refresh</button></span></div>
+   <h2 style="font-size:26px;margin:0">Website speed</h2>
+   <div class="chart sp-verdict sp-${n?lr:'na'}"><b>${!n?'Collecting':lr==='good'?'Fast':lr==='ok'?'Okay':'Slow'}</b><span>${verdict}</span></div>
+   <div class="sp-grid">${['lcp','fcp','ttfb','load','inp','cls'].map(card).join('')}</div>
+   <p class="note" style="margin:0">Measured on real customer visits (${n} page loads in this period). Each number is what 3 out of 4 visitors got or better.${Object.keys(pd).length?' By device: '+Object.entries(pd).map(([k,v])=>`${esc(k)} ${fmtMs(v.lcp)} (${v.n} loads)`).join(' · ')+'.':''}</p>
+   <h2 style="font-size:26px;margin-top:6px">Visits</h2>
    <div class="kpis">
     <div class="kpi"><div class="l">Visitors</div><div class="v">${d.visitors.toLocaleString()}</div><div class="an-sub">${ch==null?'first period tracked':`<b class="${ch>=0?'up':'down'}">${ch>=0?'▲':'▼'} ${Math.abs(ch)}%</b> vs previous ${aDays} days`}</div></div>
     <div class="kpi"><div class="l">Page views</div><div class="v">${d.views.toLocaleString()}</div><div class="an-sub">${d.sessions?(d.views/d.sessions).toFixed(1):'0'} pages per visit</div></div>
@@ -450,10 +455,6 @@ function drawAnalytics(B,d){
     <div class="chart"><div class="eyebrow">Busiest hours (page views)</div>${bars(hrs,'var(--green)',false)}</div>
     <div class="chart" style="display:grid;gap:12px;align-content:start"><div class="eyebrow">Devices</div><div class="an-chips">${split(d.devices||{})}</div><div class="eyebrow">Browsers</div><div class="an-chips">${split(d.browsers||{})}</div></div>
    </div>
-   <h2 style="font-size:26px;margin-top:6px">Website speed</h2>
-   <div class="chart sp-verdict sp-${n?lr:'na'}"><b>${!n?'Collecting':lr==='good'?'Fast':lr==='ok'?'Okay':'Slow'}</b><span>${verdict}</span></div>
-   <div class="sp-grid">${['lcp','fcp','ttfb','load','inp','cls'].map(card).join('')}</div>
-   <p class="note" style="margin:0">Measured on real customer visits (${n} page loads in this period). Each number is what 3 out of 4 visitors got or better.${Object.keys(pd).length?' By device: '+Object.entries(pd).map(([k,v])=>`${esc(k)} ${fmtMs(v.lcp)} (${v.n} loads)`).join(' · ')+'.':''}</p>
   </div>`;
 }
 
