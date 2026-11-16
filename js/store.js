@@ -200,12 +200,46 @@ function appSteps(kind){
    ${st(3,AI.plus,'Tap "Add to Home screen" or "Install app"','Then tap <b>Install</b> (or <b>Add</b>).')}
    ${st(4,'','Find it on your home screen','The yellow Cargo+420 icon opens straight to the menu.')}</ol>`;
 }
+function appPhone(){
+  const g=(c,svg,l)=>`<span class="ai"><i style="background:${c}">${svg}</i><small>${l}</small></span>`;
+  const W='fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+  const now=new Date(),day=now.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  const apps=[
+   g('linear-gradient(160deg,#5ee27a,#1fa64a)',`<svg viewBox="0 0 24 24" ${W}><path d="M4 5h16v10H9l-5 4z"/></svg>`,'Chat'),
+   g('linear-gradient(160deg,#4fb3ff,#1b6fe0)',`<svg viewBox="0 0 24 24" ${W}><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg>`,'Maps'),
+   g('linear-gradient(160deg,#ff9a5c,#ff5e3a)',`<svg viewBox="0 0 24 24" ${W}><rect x="3" y="7" width="18" height="13" rx="3"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8 7l2-3h4l2 3"/></svg>`,'Camera'),
+   g('linear-gradient(160deg,#ff6fa8,#e02f74)',`<svg viewBox="0 0 24 24" ${W}><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>`,'Music'),
+   `<span class="ai ai-cargo"><i><img src="img/store-icon-192.png" alt=""><em>1</em><b class="ap-ring"></b></i><small>Cargo+420</small></span>`,
+   g('linear-gradient(160deg,#7ad7ff,#2a9fd6)',`<svg viewBox="0 0 24 24" ${W}><circle cx="9" cy="10" r="4"/><path d="M7 19h10a4 4 0 0 0 0-8"/></svg>`,'Weather'),
+   g('linear-gradient(160deg,#ffe066,#f5b300)',`<svg viewBox="0 0 24 24" fill="none" stroke="#5a4300" stroke-width="2" stroke-linecap="round"><path d="M7 7h10M7 12h10M7 17h6"/></svg>`,'Notes'),
+   g('linear-gradient(160deg,#b28cff,#7444e8)',`<svg viewBox="0 0 24 24" ${W}><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>`,'Clock')];
+  const dock=[
+   g('linear-gradient(160deg,#5ee27a,#1fa64a)',`<svg viewBox="0 0 24 24" ${W}><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>`,''),
+   g('linear-gradient(160deg,#4fb3ff,#1b6fe0)',`<svg viewBox="0 0 24 24" ${W}><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>`,''),
+   g('linear-gradient(160deg,#ff6fa8,#e02f74)',`<svg viewBox="0 0 24 24" ${W}><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>`,''),
+   g('linear-gradient(160deg,#ffd23f,#f7a600)',`<svg viewBox="0 0 24 24" fill="#5a4300"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6L3.3 9.2l6.1-.6z"/></svg>`,'')];
+  return`<div class="ap-phone" aria-hidden="true"><div class="ap-screen">
+   <span class="ap-island"></span>
+   <div class="ap-status"><b>4:20</b><span><svg viewBox="0 0 20 12" fill="#fff"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><small>5G</small><i class="ap-bat"><i></i></i></span></div>
+   <div class="ap-widget"><small>${esc(day)}</small><b>4:20</b><span>Detroit · delivery open</span></div>
+   <div class="ap-grid">${apps.join('')}</div>
+   <div class="ap-notif"><img src="img/store-icon-192.png" alt=""><div><b>Cargo+420 <small>now</small></b><span>Out for delivery · ETA 12 min</span></div></div>
+   <div class="ap-dock">${dock.join('')}</div>
+   <span class="ap-bar"></span>
+  </div>
+  <span class="ap-spark k1">✦</span><span class="ap-spark k2">✦</span><span class="ap-spark k3">+</span><span class="ap-spark k4">✦</span>
+  </div>`;
+}
 function vApp(V){
   const kind=isIOS?'ios':isSamsung?'samsung':'android',done=isStandalone();
   const url=location.origin+'/#app';
   V.innerHTML=`<div class="wrap page ap">
    <div class="ap-hero">
-    <div class="ap-phone"><div class="ap-screen"><div class="ap-grid"><i></i><span class="ap-icon"><img src="img/store-icon-192.png" alt=""><small>Cargo+420</small></span><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div>
+    <div class="ap-stage">${appPhone()}
+     <span class="ap-call c1"><b>One tap</b> to the menu</span>
+     <span class="ap-call c2"><b>Drop alerts</b> first</span>
+     <span class="ap-call c3"><b>Saved</b> checkout</span>
+    </div>
     <div class="ap-intro"><span class="eyebrow">Free · no app store needed</span><h1>Get the Cargo+420 app</h1>
      <p class="lede">Put us on your home screen in 20 seconds. One tap opens the menu full-screen, and your name, address and cart are saved, so reordering is fast.</p>
      ${done?`<div class="ap-done">${AI.check}<span><b>You're all set.</b> You're using the app right now.</span></div>`
