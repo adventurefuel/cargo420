@@ -31,10 +31,14 @@ async function loadAll(){
 
 /* ---------- routing ---------- */
 let route='home',shopFilter={type:'all',val:null},sortBy='newest',q='';
+const STRAINS=[{id:'indica',name:'Indica',sub:'Relax · body high · night'},{id:'sativa',name:'Sativa',sub:'Uplift · head high · day'},{id:'hybrid',name:'Hybrid',sub:'Balanced · best of both'}];
+const strainOf=p=>(p.strain||'').trim().toLowerCase();
+const strainName=id=>(STRAINS.find(x=>x.id===id)||{}).name||id;
 function go(){
   const h=(location.hash||'#home').slice(1);
   route=['home','shop','drop','specials','members','events','areas','checkout','done'].includes(h)?h:'home';
   if(CATS.some(c=>c.id===h)){route='shop';shopFilter={type:'cat',val:h};q='';const hi=$('#hq');if(hi)hi.value=''}
+  if(h==='liked'||STRAINS.some(x=>x.id===h)){route='shop';shopFilter=h==='liked'?{type:'feat',val:null}:{type:'strain',val:h};q='';const hi=$('#hq');if(hi)hi.value=''}
   render();window.scrollTo(0,0);
 }
 window.addEventListener('hashchange',()=>{$('#nav').classList.remove('open');$('#menubtn')?.setAttribute('aria-expanded','false');go()});
@@ -102,6 +106,10 @@ function vHome(V){
   <nav class="catgrid" aria-label="Shop by category">
    ${HOME_CATS.map(id=>{const c=CATS.find(x=>x.id===id);return`<a class="catbtn" href="#${id}">${ICONS[id]}<span>${c.name}</span><small>${c.blurb}</small></a>`}).join('')}
    <a class="catbtn all" href="#shop">${ICONS.all}<span>Shop all</span><small>${shopItems().length} products</small></a>
+  </nav>
+  <nav class="straingrid" aria-label="Shop by strain">
+   <div class="sg-head"><b>Shop by strain</b><a href="#liked">Most liked →</a></div>
+   ${STRAINS.map(x=>`<a class="strainbtn sb-${x.id}" href="#${x.id}"><span>${x.name}</span><small>${x.sub}</small><i>${shopItems().filter(p=>strainOf(p)===x.id).length} strains</i></a>`).join('')}
   </nav>
   <div class="strip">
    <div><b>Pay your way</b><p>Cash, Cash App <span class="cashtag">$420Cargo</span> or tap your card with Square when your driver arrives.</p></div>
@@ -233,7 +241,7 @@ function openZipModal(){
 }
 
 /* ---------- shop ---------- */
-function filterLabel(){return shopFilter.type==='cat'?catName(shopFilter.val):shopFilter.type==='feat'?'Most liked':shopFilter.val||''}
+function filterLabel(){return shopFilter.type==='cat'?catName(shopFilter.val):shopFilter.type==='feat'?'Most liked':shopFilter.type==='strain'?strainName(shopFilter.val):shopFilter.val||''}
 function openFilters(){
   const on=(t,v)=>shopFilter.type===t&&(v==null||shopFilter.val===v)?'on':'';
   $('#layer').innerHTML=`<div class="scrim" data-close></div><aside class="drawer fsheet" role="dialog" aria-label="Filter and sort"><header><h2 style="font-size:30px">Filter &amp; Sort</h2><button class="x" data-close aria-label="Close">×</button></header>
@@ -242,6 +250,8 @@ function openFilters(){
     <label>Sort by<select id="sort2"><option value="newest">Newest</option><option value="low">Price, low to high</option><option value="high">Price, high to low</option><option value="name">Name A–Z</option></select></label>
     <div class="eyebrow" style="margin-top:6px">Category</div>
     <div class="fchips"><button class="${on('all')}" data-f="all">All</button><button class="${on('feat')}" data-f="feat">Most liked</button>${CATS.map(c=>`<button class="${on('cat',c.id)}" data-f="cat" data-v="${c.id}">${c.name}</button>`).join('')}</div>
+    <div class="eyebrow" style="margin-top:6px">Strain</div>
+    <div class="fchips">${STRAINS.map(x=>`<button class="${on('strain',x.id)}" data-f="strain" data-v="${x.id}">${x.name}</button>`).join('')}</div>
     <div class="eyebrow" style="margin-top:6px">Filter</div>
     <div class="fchips">${tagsFor().map(t=>`<button class="${on('tag',t)}" data-f="tag" data-v="${esc(t)}">${esc(t)}</button>`).join('')}</div>
    </div><button class="btn" data-close style="margin-top:12px">Show results</button></aside>`;
@@ -253,6 +263,7 @@ function vShop(V){
   if(shopFilter.type==='cat')list=list.filter(p=>p.cat===shopFilter.val);
   if(shopFilter.type==='tag')list=list.filter(p=>p.tags.includes(shopFilter.val));
   if(shopFilter.type==='feat')list=list.filter(p=>p.featured);
+  if(shopFilter.type==='strain')list=list.filter(p=>strainOf(p)===shopFilter.val);
   if(q)list=list.filter(p=>(p.name+' '+p.tags.join(' ')).toLowerCase().includes(q.toLowerCase()));
   if(sortBy==='low')list.sort((a,b)=>a.price-b.price);
   if(sortBy==='high')list.sort((a,b)=>b.price-a.price);
@@ -264,6 +275,8 @@ function vShop(V){
     <li><button class="${on('all')}" data-f="all">All Products</button></li>
     <li><button class="${on('feat')}" data-f="feat">Most liked</button></li>
     ${CATS.map(c=>`<li><button class="${on('cat',c.id)}" data-f="cat" data-v="${c.id}">${c.name}</button></li>`).join('')}
+    <li class="grp">Strain</li>
+    ${STRAINS.map(x=>`<li><button class="${on('strain',x.id)}" data-f="strain" data-v="${x.id}">${x.name}</button></li>`).join('')}
     <li class="grp">Filter</li>
     ${tagsFor().map(t=>`<li><button class="${on('tag',t)}" data-f="tag" data-v="${esc(t)}">${esc(t)}</button></li>`).join('')}
    </ul></aside>
@@ -509,7 +522,7 @@ document.addEventListener('click',e=>{
   const t=e.target.closest('button,a,[data-close]');if(!t)return;
   if(t.matches('[data-close]')){$('#layer').innerHTML='';return}
   if(t.id==='cartbtn'){openCart();return}
-  if(t.dataset.f){shopFilter={type:t.dataset.f,val:t.dataset.v||null};if(t.closest('.fsheet'))$('#layer').innerHTML='';if(route!=='shop')location.hash='#shop';else{vShop($('#view'));window.scrollTo(0,0)}return}
+  if(t.dataset.f){shopFilter={type:t.dataset.f,val:t.dataset.v||null};if(route==='shop'&&location.hash!=='#shop')history.replaceState(null,'','#shop');if(t.closest('.fsheet'))$('#layer').innerHTML='';if(route!=='shop')location.hash='#shop';else{vShop($('#view'));window.scrollTo(0,0)}return}
   if(t.id==='filterbtn'){openFilters();return}
   if(t.dataset.cq2){const box=t.closest('.cq'),sp=box.querySelector('span'),max=+box.querySelector('[data-max]').dataset.max;sp.textContent=Math.max(1,Math.min(max,+sp.textContent+ +t.dataset.cq2));return}
   if(t.dataset.quick){const n=+t.closest('.cardbuy').querySelector('.cq span').textContent;addToCart(t.dataset.quick,n);t.textContent='Added ✓';setTimeout(()=>{t.textContent='Add to cart'},1200);return}
@@ -546,9 +559,9 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#layer').innerHTM
 /* ---------- header search + category bar ---------- */
 function drawCatbar(){
   const el=$('#catbar .wrap');if(!el)return;
-  const cur=route!=='shop'?'':shopFilter.type==='cat'?shopFilter.val:shopFilter.type==='all'&&!q?'all':'';
+  const cur=route!=='shop'?'':shopFilter.type==='cat'||shopFilter.type==='strain'?shopFilter.val:shopFilter.type==='feat'?'liked':shopFilter.type==='all'&&!q?'all':'';
   const have=new Set(shopItems().map(p=>p.cat));
-  el.innerHTML=`<a href="#shop" data-catall="1" class="${cur==='all'?'on':''}">Shop all</a>`+CATS.filter(c=>have.has(c.id)).map(c=>`<a href="#${c.id}" class="${cur===c.id?'on':''}">${c.name}</a>`).join('')+`<a href="#specials" class="cb-sp">Specials</a>`;
+  el.innerHTML=`<a href="#shop" data-catall="1" class="${cur==='all'?'on':''}">Shop all</a>`+`<a href="#liked" class="${cur==='liked'?'on':''}">Most liked</a>`+CATS.filter(c=>have.has(c.id)).map(c=>`<a href="#${c.id}" class="${cur===c.id?'on':''}">${c.name}</a>`).join('')+`<span class="cb-div"></span>`+STRAINS.map(x=>`<a href="#${x.id}" class="cb-st ${cur===x.id?'on':''}">${x.name}</a>`).join('')+`<a href="#specials" class="cb-sp">Specials</a>`;
 }
 function hsMatches(v){v=v.trim().toLowerCase();if(!v)return[];return shopItems().filter(p=>(p.name+' '+(p.tags||[]).join(' ')+' '+catName(p.cat)+' '+((choices(p)||[]).map(c=>c.label).join(' '))).toLowerCase().includes(v))}
 function drawSuggest(v){

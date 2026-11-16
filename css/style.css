@@ -739,3 +739,42 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .tm-acts select{width:auto;padding:6px 8px;font-size:13px}
 .tm-add{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto auto;gap:8px}
 @media(max-width:640px){.tm-add{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- yellow search, pinned on every screen ---------- */
+.hsearch input{background:var(--yellow);border-color:var(--yellow);color:#0c0c0b;font-weight:600}
+.hsearch input::placeholder{color:#0c0c0b;opacity:.72;font-weight:500}
+.hsearch input:focus{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.28)}
+.hsearch input::-webkit-search-cancel-button{filter:brightness(0)}
+.hsearch>svg{color:#0c0c0b;z-index:1}
+@media (max-width:760px){
+  .hsearch{display:block;order:5;flex:1 1 100%;max-width:none;min-width:0;margin:0 0 6px}
+  .top .wrap{flex-wrap:wrap;row-gap:6px}
+  .hsearch input{font-size:16px;padding-block:10px}
+  .hs-drop{width:100%;max-height:60vh;overflow-y:auto}
+}
+
+/* ---------- catbar extras ---------- */
+.catbar .cb-div{flex:none;width:1px;height:18px;background:var(--line);margin:0 6px}
+.catbar a.cb-st{color:var(--text)}
+.catbar a.cb-st.on{color:var(--yellow-ink)}
+
+/* ---------- shop by strain (home) ---------- */
+.straingrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:980px;margin:26px auto 6px}
+.sg-head{grid-column:1/-1;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.sg-head b{font-family:var(--f-display,Anton,sans-serif);font-size:24px;letter-spacing:.02em;text-transform:uppercase;font-weight:400}
+.sg-head a{color:var(--yellow);font-weight:700;font-size:14px;text-decoration:none}
+.strainbtn{display:grid;gap:4px;text-decoration:none;color:var(--text);background:var(--panel);border:1px solid var(--line);border-left:6px solid var(--yellow);border-radius:14px;padding:18px 18px 16px;transition:transform .15s ease,border-color .15s ease}
+.strainbtn:hover,.strainbtn:focus-visible{transform:translateY(-2px);border-color:var(--yellow)}
+.strainbtn span{font-family:var(--f-display,Anton,sans-serif);font-size:30px;line-height:1;text-transform:uppercase;letter-spacing:.02em}
+.strainbtn small{color:var(--muted);font-size:13px}
+.strainbtn i{font-style:normal;font-family:var(--f-mono);font-size:12px;color:var(--yellow);margin-top:4px}
+.strainbtn.sb-indica{border-left-color:#8b6cff}
+.strainbtn.sb-sativa{border-left-color:#ff8a2a}
+.strainbtn.sb-hybrid{border-left-color:#3ccf6e}
+@media (max-width:600px){
+  .straingrid{gap:8px;margin-top:18px}
+  .strainbtn{padding:14px 10px 12px;border-left-width:4px;text-align:center}
+  .strainbtn span{font-size:22px}
+  .strainbtn small{display:none}
+}
+@media(max-width:600px){.dropfeat .df-name{white-space:normal;overflow:visible;text-overflow:clip;font-size:17px;line-height:1.1}}
