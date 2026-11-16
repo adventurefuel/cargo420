@@ -26,6 +26,7 @@ async function loadAll(){
   const err=[p,z,s,t,e].find(x=>x.error);if(err)throw err.error;
   D.products=p.data;D.zones=z.data;D.settings=s.data;D.tiers=t.data;D.events=e.data;
   D.zips={};(zz.data||[]).forEach(r=>D.zips[r.zip]=r.city);
+  D.hhMin={};try{const hm=await sb.from('hh_city_min').select('city,min_order');(hm.data||[]).forEach(r=>D.hhMin[r.city]=Number(r.min_order))}catch(e){}
   try{const [ps,nf]=await Promise.all([sb.from('promo_settings').select('*').eq('id',1).single(),sb.rpc('next_free_order')]);D.promo=ps.data||{ref_new:10,ref_reward:10,win_cap:100};D.nextFree=nf.data||null}catch(e){D.promo={ref_new:10,ref_reward:10,win_cap:100};D.nextFree=null}
 }
 
@@ -109,11 +110,11 @@ function vSpecials(V){
     <div class="sp-status"><i></i>${esc(hh.text)}</div>
     <h1>Happy Hour!!</h1>
     <div class="sp-when"><div><small>Days</small><b>Mon – Thu</b></div><div><small>Hours</small><b>11am – 3pm</b></div></div>
-    <p class="sp-rule">Order must be placed by 3pm. <b>No exceptions.</b></p>
+    <p class="sp-rule"><b>No delivery fee</b> when your order meets your area's Happy Hour minimum. Order must be placed by 3pm. <b>No exceptions.</b></p>
     <div class="sp-mins">
-     <div><b>$25</b><span>minimum · Detroit &amp; most surrounding Wayne County cities</span></div>
-     <div><b>$50</b><span>minimum · Oakland County</span></div>
-     <div><b>$50</b><span>minimum · Macomb County</span></div>
+     <div><b>$25</b><span>minimum · Detroit &amp; nearby Wayne County cities · free delivery</span></div>
+     <div><b>$50</b><span>minimum · Oakland County &amp; farther Wayne County · free delivery</span></div>
+     <div><b>$50</b><span>minimum · Macomb County · free delivery</span></div>
     </div>
    </div></div></section>
 
@@ -348,9 +349,10 @@ function drawProduct(p){
     ${p.description?`<p class="pdesc">${esc(p.description)}</p>`:''}`;
 }
 function addToCart(id,qty,opt){const p=prod(id);opt=choices(p)?opt:undefined;const ex=cart.find(x=>x.id===id&&(x.opt||null)===(opt||null));const n=Math.min(itemStock(p,opt),(ex?ex.qty:0)+qty);if(n<=0)return toast('That option is sold out','',true);ex?ex.qty=n:cart.push(opt?{id,opt,qty:n}:{id,qty:n});saveCart();toast(`Added ${p.name}${opt?' · '+opt:''}`,'',true)}
+const effBase=()=>{const b=Number(D.settings.base_min),c=co&&co.city,m=c&&D.hhMin&&D.hhMin[c];return happyHourStatus().on&&m!=null?Math.min(b,m):b};
 const cartSub=()=>cart.reduce((s,x)=>{const p=prod(x.id);return s+(p?itemPrice(p,x.opt):0)*x.qty},0);
 function openCart(){
-  saveCart();const sub=cartSub(),base=Number(D.settings.base_min),low=sub<base;
+  saveCart();const sub=cartSub(),base=effBase(),low=sub<base;
   $('#layer').innerHTML=`<div class="scrim" data-close></div><aside class="drawer" role="dialog" aria-label="Cart"><header><h2 style="font-size:30px">Your cart</h2><button class="x" data-close aria-label="Close">×</button></header>
    <div class="body">${cart.length?cart.map((x,i)=>{const p=prod(x.id);return`<div class="line"><div class="th">${art(p)}</div><div><div style="font-size:14px">${esc(p.name)}</div>${x.opt?`<div class="note">${esc(x.opt)}</div>`:''}<div class="note num">${money(itemPrice(p,x.opt))}</div></div><div class="qty"><button data-cq="${i}" data-d="-1" aria-label="Less">−</button><span class="num">${x.qty}</span><button data-cq="${i}" data-d="1" aria-label="More">+</button></div></div>`}).join(''):'<p class="note">Your cart is empty. Tap a category on the home page to start.</p>'}</div>
    ${cart.length?`<div class="totals"><div><span>Subtotal</span><span class="num">${money(sub)}</span></div>${low?`<div class="warnbox">Add ${money(base-sub)} more. We don't deliver orders under $${base}.</div>`:''}${!D.settings.open?'<div class="warnbox">We are closed right now.</div>':''}<button class="btn" data-go="checkout" ${low||!D.settings.open?'disabled':''}>Check out · pay at the door</button></div>`:''}
@@ -397,11 +399,12 @@ function drawSummary(){
    ${Q.lines.map(x=>`<div class="row" style="justify-content:space-between;font-size:14px"><span>${x.qty} × ${esc(x.name)}</span><span class="num">${money(x.price*x.qty)}</span></div>`).join('')}
    <div class="totals"><div><span>Subtotal</span><span class="num">${money(Q.subtotal)}</span></div>
    ${Q.tier?`<div style="color:var(--green)"><span>${esc(Q.tier_name)} member −${Q.pct_off}%</span><span class="num">−${money(Q.discount)}</span></div>`:''}
-   <div><span>Delivery${Q.zone_min!=null?` ($${Number(Q.zone_min)} city minimum)`:''}</span><span class="num">${Q.fee?money(Q.fee):(Q.zone_min!=null?'Free':'Pick a city')}</span></div>
+   <div${Q.hh_free?' style="color:var(--green)"':''}><span>Delivery${Q.hh_free?' · Happy Hour':Q.zone_min!=null?` ($${Number(Q.zone_min)} city minimum)`:''}</span><span class="num">${Q.fee?money(Q.fee):(Q.zone_min!=null?'Free':'Pick a city')}</span></div>
    ${Number(Q.ref_discount)?`<div style="color:var(--green)"><span>Referral discount</span><span class="num">−${money(Q.ref_discount)}</span></div>`:''}
    ${Number(Q.credit_used)?`<div style="color:var(--green)"><span>Your referral credit</span><span class="num">−${money(Q.credit_used)}</span></div>`:''}
    <div class="grand"><span>Due at the door</span><span class="num">${money(Q.total)}</span></div></div>
-   ${Q.fee&&Q.zone_min!=null?`<p class="note">Add ${money(Q.zone_min-(Q.subtotal-Q.discount))} more to reach your city's $${Number(Q.zone_min)} minimum and skip the fee.</p>`:''}
+   ${Q.fee&&Q.happy_hour&&Q.hh_min!=null?`<p class="note" style="color:var(--yellow)">Happy Hour: add ${money(Q.hh_min-(Q.subtotal-Q.discount))} more to reach $${Number(Q.hh_min)} and delivery is free.</p>`:Q.fee&&Q.zone_min!=null?`<p class="note">Add ${money(Q.zone_min-(Q.subtotal-Q.discount))} more to reach your city's $${Number(Q.zone_min)} minimum and skip the fee.</p>`:''}
+   ${Q.hh_free?`<p class="note" style="color:var(--green)">Happy Hour free delivery applied. Order by 3pm.</p>`:''}
    ${!Q.tier&&D.tiers.length?`<p class="note">Members save ${Math.min(...D.tiers.map(t=>t.pct_off))}–${Math.max(...D.tiers.map(t=>t.pct_off))}%. Enter the phone on your membership to apply it.</p>`:''}
    ${Q.ref_error?`<div class="warnbox">${esc(Q.ref_error)}</div>`:''}
    ${Q.errors.length?`<div class="warnbox">${esc(Q.errors[0])}</div>`:''}`;
