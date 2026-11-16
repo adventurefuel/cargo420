@@ -206,7 +206,7 @@ function aOrders(B){
     ${c&&!c.id_verified?'<div class="meta" style="color:var(--warn)">ID not yet verified</div>':''}</div>
    <div><div class="meta">${esc(o.address)}, ${esc(o.city)} · <a href="https://maps.google.com/?q=${encodeURIComponent(o.address+', '+o.city+', MI')}" target="_blank" rel="noopener">Map</a></div><div class="paytag pay-${payOf(o)==='Cash'?'cash':payOf(o).startsWith('Cash App')?'cashapp':'card'}">Pays: ${esc(payOf(o))}</div>${noteOf(o)?`<div class="meta" style="color:var(--yellow)">Note: ${esc(noteOf(o))}</div>`:''}
     <div class="oitems">${o.items.map(itemRow).join('')}</div></div>
-   <div><div class="tot">${money(o.total)}</div><div class="meta" style="text-align:right">${Number(o.discount)?`member −${money(o.discount)} · `:''}${Number(o.fee)?`fee ${money(o.fee)}`:'no fee'}</div>
+   <div><div class="tot">${money(o.total)}</div><div class="meta" style="text-align:right">${Number(o.promo_disc)?`BOGO −${money(o.promo_disc)} · `:Number(o.discount)?`member −${money(o.discount)} · `:''}${Number(o.fee)?`fee ${money(o.fee)}`:'no fee'}</div>
     ${o.status==='delivered'?`<div class="meta" style="text-align:right">Cash ${o.cash_in?'turned in':'with '+esc(drvName(o.driver_id)||'driver')}</div>`:''}</div>
    <div class="acts">${o.status==='cancelled'||o.status==='delivered'?`<span class="meta">${o.driver_id?'Driver: '+esc(drvName(o.driver_id)):''}</span>`:`
     <select data-drv="${o.id}" aria-label="Assign driver"><option value="">Assign driver</option>${A.drivers.filter(d=>d.active||d.id===o.driver_id).map(d=>`<option value="${d.id}" ${o.driver_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
@@ -225,10 +225,10 @@ function aCustomers(B){
   const quietN=list.filter(isQuiet).length;
   if(custQuiet)list=list.filter(isQuiet).sort((a,b)=>new Date(a.last)-new Date(b.last));
   const refs={};A.customers.forEach(c=>{if(c.referred_by)refs[c.referred_by]=(refs[c.referred_by]||0)+1});
-  B.innerHTML=`<div style="display:grid;gap:12px"><div class="row" style="justify-content:space-between"><input id="custq" placeholder="Search name, phone, city" value="${esc(custQ)}" style="max-width:320px"><div class="filters"><button class="${custQuiet?'':'on'}" data-quiet="0">All</button><button class="${custQuiet?'on':''}" data-quiet="1">Quiet 21+ days <span class="num">${quietN}</span></button></div><span class="note">${list.length} customers · order stats cover the last 90 days</span></div>
+  B.innerHTML=`<div style="display:grid;gap:12px"><div class="row" style="justify-content:space-between"><input id="custq" placeholder="Search name, phone, city" value="${esc(custQ)}" style="max-width:320px"><div class="filters"><button class="${custQuiet?'':'on'}" data-quiet="0">All</button><button class="${custQuiet?'on':''}" data-quiet="1">Quiet 21+ days <span class="num">${quietN}</span></button></div><span class="note">${list.length} customers · ${A.customers.filter(c=>c.sms_optin).length} opted in to texts · order stats cover the last 90 days</span><div class="row"><button class="btn sm" data-custcsv="all">Download customer list</button><button class="btn ghost sm" data-custcsv="optin">Texts-OK only</button></div></div>
   ${custQuiet?`<div class="install"><b>Win them back</b><span class="note">Text each person yourself, one at a time, from your own phone. Tap a number to call, or copy this message:</span><div class="row"><span class="mono" style="font-size:13px" id="wbmsg">Hey, it's Cargo+420! Haven't seen you in a minute. Happy Hour is Mon–Thu 11am–3pm with a $25 minimum in Detroit. cargo420.onrender.com</span><button class="btn sm" id="copywb">Copy message</button></div></div>`:''}
   <div class="tblwrap"><table><thead><tr><th>Customer</th><th>Phone</th><th>Address</th><th class="r">Orders</th><th class="r">Spent</th><th>Last order</th><th>Membership</th><th>Referral code</th><th class="r">Credit</th><th class="r">Referred</th><th>ID verified</th><th>Notes</th></tr></thead><tbody>
-  ${list.map(c=>`<tr><td><b>${esc(c.name)}</b></td><td class="mono"><a href="tel:${esc(c.phone.replace(/\D/g,''))}">${esc(c.phone)}</a></td><td>${esc(c.address||'')}${c.city?', '+esc(c.city):''}</td><td class="r num">${c.n}</td><td class="r num">${money(c.spent)}</td><td>${c.last?ago(c.last):'—'}</td>
+  ${list.map(c=>`<tr><td><b>${esc(c.name)}</b></td><td class="mono"><a href="tel:${esc(c.phone.replace(/\D/g,''))}">${esc(c.phone)}</a>${c.sms_optin?' <span class="pill p-delivered" title="Opted in to deal texts">Texts OK</span>':''}</td><td>${esc(c.address||'')}${c.city?', '+esc(c.city):''}</td><td class="r num">${c.n}</td><td class="r num">${money(c.spent)}</td><td>${c.last?ago(c.last):'—'}</td>
    <td>${c.m?`<span class="pill p-new">${esc(tierName(c.m.tier))}</span>`:'<span class="note">—</span>'}</td>
    <td class="mono">${esc(c.ref_code||'')}</td><td class="r num">${Number(c.credit)?money(c.credit):'—'}</td><td class="r num">${refs[c.id]||0}</td>
    <td><label class="toggle"><input type="checkbox" data-idv="${c.id}" ${c.id_verified?'checked':''}> ${c.id_verified?'Yes':'No'}</label></td>
@@ -400,6 +400,19 @@ function bars(data,color,cur=true,W=520,H=200){
   data.forEach((d,i)=>{const h=(H-pt-pb)*d.v/top;const x=pl+i*bw+bw*.18;s+=`<rect x="${x}" y="${H-pb-h}" width="${bw*.64}" height="${Math.max(0,h)}" rx="2" fill="${color}" opacity="${i===data.length-1?1:.75}"><title>${d.tip||d.lbl}: ${cur?money(d.v):d.v.toLocaleString()}</title></rect><text x="${x+bw*.32}" y="${H-8}" text-anchor="middle" font-size="10" fill="var(--muted)">${d.lbl}</text>`});
   return`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Bar chart" style="width:100%;height:auto">${s}</svg>`;
 }
+async function downloadCustomers(which,btn){
+  const old=btn.textContent;btn.disabled=true;btn.textContent='Preparing…';
+  const {data,error}=await sb.rpc('customer_export');btn.disabled=false;btn.textContent=old;
+  if(error)return toast('Download failed',errMsg(error));
+  let rows=data||[];if(which==='optin')rows=rows.filter(r=>r.texts_ok);
+  if(!rows.length)return toast(which==='optin'?'Nobody has opted in to texts yet':'No customers yet','',true);
+  const d=v=>v?new Date(v).toLocaleDateString('en-US'):'';
+  const out=[['name','phone','email','texts_ok','texts_ok_since','city','address','orders','total_spent','first_order','last_order','days_since_last_order','membership','birthdate','referral_code','credit','customer_since']];
+  rows.forEach(r=>out.push([r.name,r.phone,r.email||'',r.texts_ok?'yes':'no',d(r.texts_ok_since),r.city||'',r.address||'',r.orders,Number(r.spent).toFixed(2),d(r.first_order),d(r.last_order),r.last_order?Math.floor((Date.now()-new Date(r.last_order))/864e5):'',r.membership||'',r.birthdate||'',r.ref_code??r.referral_code??'',Number(r.credit||0).toFixed(2),d(r.customer_since)]));
+  const csv=out.map(r=>r.map(v=>{v=String(v??'');return/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`cargo420-customers${which==='optin'?'-texts-ok':''}-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();a.remove();
+  toast(`Downloaded ${rows.length} customers`,'Sorted by total spent, best customers first.',true);
+}
 function downloadCsv(which){
   const rows=[['order','placed','status','customer','phone','address','city','items','subtotal','discount','fee','total','collected','driver','cash_turned_in']];
   A.orders.filter(o=>which==='today'?isToday(o.created_at):true).forEach(o=>rows.push([o.code,new Date(o.created_at).toLocaleString(),o.status,o.cust_name,o.cust_phone,o.address,o.city,o.items.map(i=>i.qty+'x '+i.name).join('; '),o.subtotal,o.discount,o.fee,o.total,o.collected??'',drvName(o.driver_id),o.cash_in?'yes':'no']));
@@ -408,7 +421,7 @@ function downloadCsv(which){
 }
 /* ---------- analytics: visits + site speed ---------- */
 let aDays=30;const AN={};
-const PAGE_LBL={home:'Home',shop:'Shop all',drop:'Drop page',specials:'Happy Hour',members:'Membership',events:'Events',areas:'Service area',checkout:'Checkout',done:'Order placed',liked:'Most liked',indica:'Indica',sativa:'Sativa',hybrid:'Hybrid'};
+const PAGE_LBL={home:'Home',shop:'Shop all',drop:'Drop page',specials:'Happy Hour',members:'Membership',events:'Events',areas:'Service area',checkout:'Checkout',done:'Order placed',liked:'Most liked',indica:'Indica',sativa:'Sativa',hybrid:'Hybrid',app:'Get the app'};
 const pageLbl=p=>PAGE_LBL[p]||(typeof catName==='function'&&CATS.some(c=>c.id===p)?catName(p):p);
 const SPEED={lcp:[2500,4000,'Main content shows'],fcp:[1800,3000,'First paint'],ttfb:[800,1800,'Server response'],load:[3000,6000,'Fully loaded'],inp:[200,500,'Tap response'],cls:[.1,.25,'Layout stability']};
 const rate=(k,v)=>v==null?'na':v<=SPEED[k][0]?'good':v<=SPEED[k][1]?'ok':'poor';
@@ -521,6 +534,7 @@ document.addEventListener('click',async e=>{
   if(t.dataset.pdel){$('#pdel-c').hidden=false;return}
   if(t.dataset.pdelyes){const {error}=await sb.from('products').delete().eq('id',t.dataset.pdelyes);if(error)return toast('Not deleted',errMsg(error));A.products=A.products.filter(p=>p.id!==t.dataset.pdelyes);editing=null;dEditing=null;render();return}
   if(t.dataset.csv){downloadCsv(t.dataset.csv);return}
+  if(t.dataset.custcsv){downloadCustomers(t.dataset.custcsv,t);return}
   if(t.dataset.adays){aDays=+t.dataset.adays;aAnalytics($('#admbody'));return}
   if(t.dataset.arefresh){delete AN[aDays];aAnalytics($('#admbody'));return}
 });

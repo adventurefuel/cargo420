@@ -76,7 +76,7 @@ function go(){
   const h=(location.hash||'#home').slice(1);
   try{trackView(h)}catch(e){}
   if(h==='happyhour')location.replace('#specials');
-  route=['home','shop','drop','specials','members','events','areas','checkout','done'].includes(h)?h:'home';
+  route=['home','shop','drop','specials','members','events','areas','checkout','done','app'].includes(h)?h:'home';
   if(CATS.some(c=>c.id===h)){route='shop';shopFilter={type:'cat',val:h};q='';const hi=$('#hq');if(hi)hi.value=''}
   if(h==='liked'||STRAINS.some(x=>x.id===h)){route='shop';shopFilter=h==='liked'?{type:'feat',val:null}:{type:'strain',val:h};q='';const hi=$('#hq');if(hi)hi.value=''}
   render();window.scrollTo(0,0);
@@ -86,16 +86,20 @@ function render(){
   document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.r===route));
   const b=$('#banner');
   if(!D.settings.open){b.className='banner closed';b.textContent='We are closed right now and not taking orders. Hours: '+D.settings.hours}
-  else{b.className='banner';b.textContent=`Pay at the door: Cash · Cash App $420Cargo · Card tap · $${Number(D.settings.base_min)} minimum on every order · Valid 21+ ID checked at delivery · Hours ${D.settings.hours}`}
+  else{b.className='banner';b.textContent=(bogoOn()?'LAUNCH WEEK: Buy one, get one 50% off · ':'')+`Pay at the door: Cash · Cash App $420Cargo · Card tap · $${Number(D.settings.base_min)} minimum on every order · Valid 21+ ID checked at delivery · Hours ${D.settings.hours}`}
   stopDropTimers();
   drawCatbar();
-  ({home:vHome,shop:vShop,drop:vDrop,specials:vSpecials,members:vMembers,events:vEvents,areas:vAreas,checkout:vCheckout,done:vDone}[route])($('#view'));
+  ({home:vHome,shop:vShop,drop:vDrop,specials:vSpecials,members:vMembers,events:vEvents,areas:vAreas,checkout:vCheckout,done:vDone,app:vApp}[route])($('#view'));
+  drawAppNudge();
   saveCart();
 }
 
 /* ---------- home ---------- */
 /* ---------- specials ---------- */
 function detroitNow(){const f=new Intl.DateTimeFormat('en-US',{timeZone:'America/Detroit',weekday:'short',hour:'numeric',minute:'numeric',hour12:false}).formatToParts(new Date());const g=t=>f.find(x=>x.type===t)?.value;return{day:g('weekday'),h:+g('hour')%24,m:+g('minute')}}
+const bogoOn=()=>{const P=D.promo||{};if(!P.bogo_starts)return false;const n=Date.now();return n>=new Date(P.bogo_starts).getTime()&&n<new Date(P.bogo_ends).getTime()};
+const bogoEndTxt=()=>new Date(new Date(D.promo.bogo_ends).getTime()-1).toLocaleDateString('en-US',{timeZone:'America/Detroit',weekday:'short',month:'short',day:'numeric'});
+function bogoStrip(){if(!bogoOn())return'';return`<a class="bogo" href="#shop"><b>Buy one, get one 50% off</b><span>Launch week celebration · ends ${esc(bogoEndTxt())} · drops &amp; daily deals excluded</span><u>Shop →</u></a>`}
 function happyHourStatus(){const {day,h,m}=detroitNow();const days=['Mon','Tue','Wed','Thu'];const mins=h*60+m;
   if(days.includes(day)&&mins>=660&&mins<900){const left=900-mins;return{on:true,text:`Happy Hour is on now · ${Math.floor(left/60)?Math.floor(left/60)+'h ':''}${left%60}m left to order`}}
   if(days.includes(day)&&mins<660)return{on:false,text:'Happy Hour starts today at 11am'};
@@ -141,7 +145,7 @@ function freeCounter(){const n=D.nextFree;if(!n||!(Number(n.cap)>0))return'';ret
 function vHome(V){
   V.innerHTML=`<div class="wrap">
   <section class="hero"><img src="img/logo.webp" alt="Cargo+420 Exclusive Delivery Service"><p>Metro Detroit cannabis delivery. Pick a category, build your order, pay at the door with cash, Cash App or card.</p>
-   ${dropFeature()}${freeCounter()}
+   ${bogoStrip()}${dropFeature()}${freeCounter()}
    <button class="zipchip" id="zipchip">${myZip?`${ICONS.pin}<span>Delivering to <b>${esc(myZip.city)} ${esc(myZip.zip)}</b></span><u>Change</u>`:`${ICONS.pin}<span>Do we deliver to you?</span><u>Check your ZIP</u>`}</button></section>
   <nav class="catgrid" aria-label="Shop by category">
    ${HOME_CATS.filter(id=>shopItems().some(p=>p.cat===id)).map(id=>{const c=CATS.find(x=>x.id===id);return`<a class="catbtn" href="#${id}">${ICONS[id]}<span>${c.name}</span><small>${c.blurb}</small></a>`}).join('')}
@@ -161,6 +165,79 @@ function vHome(V){
    <div><b>5. Receive</b><span>Driver sends an ETA. Show ID, pay with cash, Cash App or card.</span></div>
   </div></div>`;
 }
+/* ---------- get the app (add to home screen) ---------- */
+let installEvt=null;
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;if(route==='app')vApp($('#view'))});
+addEventListener('appinstalled',()=>{installEvt=null;try{localStorage.setItem('c420appdone','1')}catch(e){};if(route==='app')vApp($('#view'));toast('Cargo+420 is on your home screen','',true)});
+const UA=navigator.userAgent;
+const isIOS=/iPhone|iPad|iPod/.test(UA)||(/Macintosh/.test(UA)&&navigator.maxTouchPoints>1);
+const isAndroid=/Android/.test(UA);
+const isSamsung=/SamsungBrowser/.test(UA);
+const inAppBrowser=/Instagram|FBAN|FBAV|FB_IAB|Snapchat|TikTok|Line\/|Twitter/i.test(UA);
+const iosNotSafari=isIOS&&/CriOS|FxiOS|EdgiOS/.test(UA);
+const isStandalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const AI={
+ share:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8"/></svg>',
+ plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>',
+ dots:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
+ hdots:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+ menu:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
+ check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>'};
+function appSteps(kind){
+  const st=(n,ic,t,d)=>`<li><span class="ap-n">${n}</span><div><b>${ic?`<i class="ap-ic">${ic}</i>`:''}${t}</b><span>${d}</span></div></li>`;
+  if(kind==='ios')return`<ol class="ap-steps">
+   ${st(1,'','Open this page in Safari','Use Safari, the compass app. Instagram, Facebook and Chrome on iPhone can\'t add apps to your home screen.')}
+   ${st(2,AI.share,'Tap the Share button','The square with the arrow pointing up. It\'s at the bottom of the screen. On newer iPhones, tap the <b>•••</b> button first, then <b>Share</b>.')}
+   ${st(3,AI.plus,'Tap "Add to Home Screen"','Scroll down the list if you don\'t see it right away.')}
+   ${st(4,'','Tap "Add"','The yellow Cargo+420 icon shows up on your home screen. Tap it any time to order.')}</ol>`;
+  if(kind==='samsung')return`<ol class="ap-steps">
+   ${st(1,AI.menu,'Tap the menu','The three lines at the bottom right of Samsung Internet.')}
+   ${st(2,AI.plus,'Tap "Add page to"','Then choose <b>Home screen</b>.')}
+   ${st(3,'','Tap "Add"','The yellow Cargo+420 icon shows up on your home screen.')}</ol>`;
+  return`<ol class="ap-steps">
+   ${st(1,'','Open this page in Chrome','If you came from Instagram or Facebook, tap their menu and choose <b>Open in Chrome</b> first.')}
+   ${st(2,AI.dots,'Tap the ⋮ menu','The three dots at the top right of Chrome.')}
+   ${st(3,AI.plus,'Tap "Add to Home screen" or "Install app"','Then tap <b>Install</b> (or <b>Add</b>).')}
+   ${st(4,'','Find it on your home screen','The yellow Cargo+420 icon opens straight to the menu.')}</ol>`;
+}
+function vApp(V){
+  const kind=isIOS?'ios':isSamsung?'samsung':'android',done=isStandalone();
+  const url=location.origin+'/#app';
+  V.innerHTML=`<div class="wrap page ap">
+   <div class="ap-hero">
+    <div class="ap-phone"><div class="ap-screen"><div class="ap-grid"><i></i><span class="ap-icon"><img src="img/store-icon-192.png" alt=""><small>Cargo+420</small></span><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div>
+    <div class="ap-intro"><span class="eyebrow">Free · no app store needed</span><h1>Get the Cargo+420 app</h1>
+     <p class="lede">Put us on your home screen in 20 seconds. One tap opens the menu full-screen, and your name, address and cart are saved, so reordering is fast.</p>
+     ${done?`<div class="ap-done">${AI.check}<span><b>You're all set.</b> You're using the app right now.</span></div>`
+      :inAppBrowser?`<div class="warnbox ap-warn"><b>Open this page in ${isIOS?'Safari':'Chrome'} first.</b> You're inside ${/Instagram/i.test(UA)?'Instagram':'another app'}'s browser, which can't add apps. Tap the ${isIOS?'<b>•••</b> or share':'<b>⋮</b>'} menu and choose <b>Open in ${isIOS?'Safari':'browser'}</b>, or copy the link below and paste it into ${isIOS?'Safari':'Chrome'}.<div class="row" style="margin-top:8px"><span class="mono">${esc(url.replace(/^https:\/\//,''))}</span><button class="btn sm" type="button" data-copyapp="${esc(url)}">Copy link</button></div></div>`
+      :installEvt?`<button class="btn ap-install" type="button" id="apinstall">Install the app</button><p class="note">Tap Install, then confirm. That's it.</p>`
+      :iosNotSafari?`<div class="warnbox ap-warn"><b>Open this page in Safari.</b> On iPhone, only Safari can add apps to your home screen. Copy the link and paste it into Safari.<div class="row" style="margin-top:8px"><span class="mono">${esc(url.replace(/^https:\/\//,''))}</span><button class="btn sm" type="button" data-copyapp="${esc(url)}">Copy link</button></div></div>`:''}
+    </div>
+   </div>
+   <div class="ap-tabs" role="tablist">${[['ios','iPhone'],['android','Android · Chrome'],['samsung','Samsung Internet']].map(([k,l])=>`<button class="${k===kind?'on':''}" data-apk="${k}" role="tab">${l}</button>`).join('')}</div>
+   <div id="apsteps">${appSteps(kind)}</div>
+   <div class="ap-why">
+    <div><b>Faster reorders</b><span>Your details are remembered on this phone.</span></div>
+    <div><b>Drop alerts</b><span>Be first to the next numbered drop.</span></div>
+    <div><b>No download</b><span>Takes no storage and always has the latest menu.</span></div>
+   </div>
+   <a class="btn" href="#shop">Start shopping →</a>
+  </div>`;
+}
+function drawAppNudge(){
+  let el=$('#appnudge');const skip=isStandalone()||!(isIOS||isAndroid)||route==='app'||route==='checkout'||(()=>{try{return localStorage.getItem('c420appnudge')||localStorage.getItem('c420appdone')}catch(e){return 1}})();
+  if(skip){if(el)el.remove();return}
+  if(!el){el=document.createElement('div');el.id='appnudge';el.className='appnudge';document.body.appendChild(el)}
+  el.innerHTML=`<img src="img/store-icon-192.png" alt=""><a href="#app"><b>Get the Cargo+420 app</b><span>Add us to your home screen · 20 seconds</span></a><button type="button" aria-label="Dismiss" data-nudgex="1">×</button>`;
+}
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('[data-apk],#apinstall,[data-copyapp],[data-nudgex]');if(!t)return;
+  if(t.dataset.apk){document.querySelectorAll('.ap-tabs button').forEach(b=>b.classList.toggle('on',b===t));$('#apsteps').innerHTML=appSteps(t.dataset.apk);return}
+  if(t.id==='apinstall'&&installEvt){installEvt.prompt();const r=await installEvt.userChoice.catch(()=>null);installEvt=null;if(r&&r.outcome==='accepted'){try{localStorage.setItem('c420appdone','1')}catch(e){}}vApp($('#view'));return}
+  if(t.dataset.copyapp){try{await navigator.clipboard.writeText(t.dataset.copyapp);toast('Link copied','Paste it into '+(isIOS?'Safari':'Chrome'),true)}catch(err){prompt('Copy this link',t.dataset.copyapp)}return}
+  if(t.dataset.nudgex){try{localStorage.setItem('c420appnudge','1')}catch(err){};$('#appnudge')?.remove();return}
+});
+
 function vAreas(V){
   const base=Number(D.settings.base_min);
   V.innerHTML=`<div class="sa">
@@ -379,6 +456,8 @@ function vCheckout(V){
    <label>Delivery notes (optional)<textarea id="co-notes" rows="2" maxlength="300" placeholder="Gate code, parking, best way to reach you">${esc(co.notes)}</textarea></label>
    <label>Referral code (optional)<input id="co-ref" autocomplete="off" maxlength="8" style="text-transform:uppercase;font-family:var(--f-mono);letter-spacing:.12em" placeholder="ABCDE" value="${esc(co.ref||store.get('c420ref','')||'')}"></label>
    <div class="paypick"><span class="eyebrow">How will you pay at the door?</span><div class="payopts">${PAYS.map(x=>`<button type="button" class="payopt${(co.pay||'cash')===x.id?' on':''}" data-pay="${x.id}"><b>${x.label}</b><small>${x.sub}</small></button>`).join('')}</div></div>
+   <label>Email (optional)<input id="co-email" type="email" autocomplete="email" maxlength="120" placeholder="you@email.com" value="${esc(co.email||'')}"></label>
+   <label class="check"><input type="checkbox" id="co-sms" ${co.sms?'checked':''}> <span><b>Text me deals and drop alerts.</b> A few texts a month to this number. Reply STOP anytime. Not required to order.</span></label>
    <label class="check"><input type="checkbox" id="co-age"> <span>I'm 21 or older and will show a valid government ID to the driver. I'll meet the driver at their vehicle with payment ready.</span></label>
    <div id="co-err" class="warnbox" hidden></div>
    <button class="btn" type="submit" id="co-submit" style="justify-self:start;font-size:17px;padding:12px 24px">Place order</button>
@@ -398,19 +477,22 @@ function drawSummary(){
   el.innerHTML=`<h2 style="font-size:26px">Order summary</h2>
    ${Q.lines.map(x=>`<div class="row" style="justify-content:space-between;font-size:14px"><span>${x.qty} × ${esc(x.name)}</span><span class="num">${money(x.price*x.qty)}</span></div>`).join('')}
    <div class="totals"><div><span>Subtotal</span><span class="num">${money(Q.subtotal)}</span></div>
-   ${Q.tier?`<div style="color:var(--green)"><span>${esc(Q.tier_name)} member −${Q.pct_off}%</span><span class="num">−${money(Q.discount)}</span></div>`:''}
+   ${Number(Q.bogo)?`<div style="color:var(--green)"><span>Launch BOGO · 2nd item 50% off</span><span class="num">−${money(Q.bogo)}</span></div>`:''}
+   ${Number(Q.member_disc)?`<div style="color:var(--green)"><span>${esc(Q.tier_name)} member −${Q.pct_off}%</span><span class="num">−${money(Q.member_disc)}</span></div>`:''}
    <div${Q.hh_free?' style="color:var(--green)"':''}><span>Delivery${Q.hh_free?' · Happy Hour':Q.zone_min!=null?` ($${Number(Q.zone_min)} city minimum)`:''}</span><span class="num">${Q.fee?money(Q.fee):(Q.zone_min!=null?'Free':'Pick a city')}</span></div>
    ${Number(Q.ref_discount)?`<div style="color:var(--green)"><span>Referral discount</span><span class="num">−${money(Q.ref_discount)}</span></div>`:''}
    ${Number(Q.credit_used)?`<div style="color:var(--green)"><span>Your referral credit</span><span class="num">−${money(Q.credit_used)}</span></div>`:''}
    <div class="grand"><span>Due at the door</span><span class="num">${money(Q.total)}</span></div></div>
    ${Q.fee&&Q.happy_hour&&Q.hh_min!=null?`<p class="note" style="color:var(--yellow)">Happy Hour: add ${money(Q.hh_min-(Q.subtotal-Q.discount))} more to reach $${Number(Q.hh_min)} and delivery is free.</p>`:Q.fee&&Q.zone_min!=null?`<p class="note">Add ${money(Q.zone_min-(Q.subtotal-Q.discount))} more to reach your city's $${Number(Q.zone_min)} minimum and skip the fee.</p>`:''}
    ${Q.hh_free?`<p class="note" style="color:var(--green)">Happy Hour free delivery applied. Order by 3pm.</p>`:''}
+   ${Q.bogo_on&&!Number(Q.bogo)&&!Number(Q.member_disc)?`<p class="note" style="color:var(--yellow)">Launch week: add one more item and the lower-priced one is 50% off. Drops and daily deals excluded.</p>`:''}
+   ${Number(Q.bogo)&&Q.tier?`<p class="note">BOGO saves you more than your ${esc(Q.tier_name)} discount on this order, so we applied it instead. Specials don't stack.</p>`:''}
    ${!Q.tier&&D.tiers.length?`<p class="note">Members save ${Math.min(...D.tiers.map(t=>t.pct_off))}–${Math.max(...D.tiers.map(t=>t.pct_off))}%. Enter the phone on your membership to apply it.</p>`:''}
    ${Q.ref_error?`<div class="warnbox">${esc(Q.ref_error)}</div>`:''}
    ${Q.errors.length?`<div class="warnbox">${esc(Q.errors[0])}</div>`:''}`;
   const b=$('#co-submit');if(b)b.textContent=`Place order · ${money(Q.total)}`;
 }
-function readCo(){const gs=$('#co-giftsel');co={pay:co.pay||'cash',ref:($('#co-ref')?.value||'').trim().toUpperCase(),gift:gs?gs.value:'',name:$('#co-name').value.trim(),phone:$('#co-phone').value.trim(),address:$('#co-address').value.trim(),city:$('#co-city').value,notes:$('#co-notes').value.trim(),age:$('#co-age').checked};store.set('c420co',{...co,age:undefined})}
+function readCo(){const gs=$('#co-giftsel');co={pay:co.pay||'cash',ref:($('#co-ref')?.value||'').trim().toUpperCase(),gift:gs?gs.value:'',name:$('#co-name').value.trim(),phone:$('#co-phone').value.trim(),address:$('#co-address').value.trim(),city:$('#co-city').value,notes:$('#co-notes').value.trim(),email:($('#co-email')?.value||'').trim(),sms:!!$('#co-sms')?.checked,age:$('#co-age').checked};store.set('c420co',{...co,age:undefined})}
 async function placeOrder(){
   if(placing)return;readCo();const e=$('#co-err');e.hidden=true;
   const miss=[];if(!co.name)miss.push('your name');if(co.phone.replace(/\D/g,'').length<10)miss.push('a 10-digit mobile number');if(!co.address)miss.push('your street address');if(!co.city)miss.push('your city');
@@ -420,6 +502,7 @@ async function placeOrder(){
   const {data,error}=await sb.rpc('checkout',{p_ref:co.ref||null,p_items:cart,p_name:co.name,p_phone:co.phone,p_address:co.address,p_city:co.city,p_notes:['PAY: '+payLabel(co.pay),co.gift?'FREE: '+co.gift:'',co.notes].filter(Boolean).join(' · '),p_age_ok:co.age});
   placing=false;
   if(error){e.hidden=false;e.textContent=errMsg(error);b.disabled=false;refreshQuote();return}
+  if(co.sms||co.email)sb.rpc('set_marketing_prefs',{p_phone:co.phone,p_email:co.email||null,p_sms_optin:!!co.sms}).then(()=>{},()=>{});
   store.set('c420last',{...data,name:co.name,phone:co.phone,pay:co.pay||'cash'});try{localStorage.removeItem('c420ref')}catch(e){};co.ref='';store.set('c420co',{...co,age:undefined});cart=[];saveCart();
   loadAll().catch(()=>{});location.hash='#done';
 }
