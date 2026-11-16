@@ -7,7 +7,7 @@ const tierName=id=>(A.tiers.find(t=>t.id===id)||{name:id}).name;
 const drvName=id=>(A.drivers.find(d=>d.id===id)||{}).name||'';
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 let ROLE='owner',ROLE_NAME='';
-const ROLE_TABS={owner:null,inventory:['inventory','drops'],marketing:['drops','events','customers','reports']};
+const ROLE_TABS={owner:null,inventory:['inventory','drops'],marketing:['drops','events','customers','reports','analytics']};
 const ROLE_LABEL={owner:'Owner',driver:'Driver',marketing:'Marketing',inventory:'Inventory'};
 let custQuiet=false,tab='orders',ordFilter='active',custQ='',invQ='',flashIds=new Set(),user=null,channel=null;
 const V=()=>$('#view');
@@ -157,7 +157,7 @@ async function render(){
   const street=A.orders.filter(o=>o.status==='out'&&isCash(o)).reduce((s,o)=>s+Number(o.total),0)+A.orders.filter(o=>o.status==='delivered'&&!o.cash_in&&isCash(o)).reduce((s,o)=>s+Number(o.collected??o.total),0);
   const nNew=A.orders.filter(o=>o.status==='new').length,pend=A.members.filter(m=>m.status==='pending').length,low=A.products.filter(p=>p.active&&p.cat!=='drop'&&p.stock<=3).length;
   const liveDrop=A.products.some(p=>p.cat==='drop'&&p.active&&p.stock>0&&p.drop_at&&new Date(p.drop_at)<=new Date())?'LIVE':0;
-  let tabs=[['orders','Orders',nNew],['customers','Customers'],['drivers','Drivers & cash'],['inventory','Inventory',low],['drops','Drops',liveDrop],['members','Members',pend],['events','Events'],['reports','Reports'],['settings','Settings']];
+  let tabs=[['orders','Orders',nNew],['customers','Customers'],['drivers','Drivers & cash'],['inventory','Inventory',low],['drops','Drops',liveDrop],['members','Members',pend],['events','Events'],['reports','Reports'],['analytics','Analytics'],['settings','Settings']];
   if(ROLE_TABS[ROLE]){tabs=tabs.filter(t=>ROLE_TABS[ROLE].includes(t[0]));if(!ROLE_TABS[ROLE].includes(tab))tab=ROLE_TABS[ROLE][0]}
   const owner=ROLE==='owner';
   const ps=owner?await pushState():null;
@@ -176,7 +176,7 @@ async function render(){
    </div>
    <div class="tabs" role="tablist">${tabs.map(([id,l,b])=>`<button role="tab" class="${tab===id?'on':''}" data-tab="${id}">${l}${b?`<span class="b">${b}</span>`:''}</button>`).join('')}</div>
    <div id="admbody"></div></div>`;
-  ({orders:aOrders,customers:aCustomers,drivers:aDrivers,inventory:aInventory,drops:aDrops,members:aMembers,events:aEvents,reports:aReports,settings:aSettings}[tab])($('#admbody'));
+  ({orders:aOrders,customers:aCustomers,drivers:aDrivers,inventory:aInventory,drops:aDrops,members:aMembers,events:aEvents,reports:aReports,analytics:aAnalytics,settings:aSettings}[tab])($('#admbody'));
   if(!owner)document.querySelectorAll('#admbody [data-cnote],#admbody [data-idv]').forEach(e=>e.disabled=true);
   if(owner&&tab==='settings')loadTeam();
   if(focus&&$('#'+focus)){const el=$('#'+focus);el.focus();if(el.setSelectionRange&&typeof el.value==='string')try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}
@@ -392,12 +392,12 @@ function aReports(B){
   <div class="cols"><div class="chart"><div class="eyebrow">Top products by revenue · 90 days</div><div style="display:grid;gap:6px;margin-top:10px">${topL.map(([n,v])=>`<div><div class="row" style="justify-content:space-between;font-size:13px"><span>${esc(n)}</span><span class="num">${money0(v)}</span></div><div style="height:6px;background:var(--panel2);border-radius:3px"><div style="height:6px;border-radius:3px;background:var(--yellow);width:${(v/topL[0][1]*100).toFixed(1)}%"></div></div></div>`).join('')||'<p class="note">Delivered orders will show here.</p>'}</div></div>
    <div class="chart" style="display:grid;gap:10px;align-content:start"><div class="eyebrow">Export</div><p class="note" style="margin:0">Download orders as a spreadsheet file (opens in Excel or Google Sheets).</p><div class="row"><button class="btn sm" data-csv="today">Today's orders</button><button class="btn ghost sm" data-csv="90">Last 90 days</button></div></div></div></div>`;
 }
-function bars(data,color){
-  const W=520,H=200,pl=48,pb=24,pt=12,max=Math.max(1,...data.map(d=>d.v));
-  const step=max>4000?1000:max>2000?500:max>800?200:max>300?100:max>100?50:25;const top=Math.ceil(max/step)*step;
+function bars(data,color,cur=true,W=520,H=200){
+  const pl=48,pb=24,pt=12,max=Math.max(1,...data.map(d=>d.v));
+  const step=max>4000?1000:max>2000?500:max>800?200:max>300?100:max>100?50:cur?25:max>40?10:max>20?5:max>8?2:1;const top=Math.ceil(max/step)*step;
   const bw=(W-pl-8)/data.length;let s='';
-  for(let v=0;v<=top;v+=step){const y=pt+(H-pt-pb)*(1-v/top);s+=`<line x1="${pl}" x2="${W-4}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${pl-6}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="JetBrains Mono,monospace">$${v.toLocaleString()}</text>`}
-  data.forEach((d,i)=>{const h=(H-pt-pb)*d.v/top;const x=pl+i*bw+bw*.18;s+=`<rect x="${x}" y="${H-pb-h}" width="${bw*.64}" height="${Math.max(0,h)}" rx="2" fill="${color}" opacity="${i===data.length-1?1:.75}"><title>${d.lbl}: ${money(d.v)}</title></rect><text x="${x+bw*.32}" y="${H-8}" text-anchor="middle" font-size="10" fill="var(--muted)">${d.lbl}</text>`});
+  for(let v=0;v<=top;v+=step){const y=pt+(H-pt-pb)*(1-v/top);s+=`<line x1="${pl}" x2="${W-4}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${pl-6}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="JetBrains Mono,monospace">${cur?'$':''}${v.toLocaleString()}</text>`}
+  data.forEach((d,i)=>{const h=(H-pt-pb)*d.v/top;const x=pl+i*bw+bw*.18;s+=`<rect x="${x}" y="${H-pb-h}" width="${bw*.64}" height="${Math.max(0,h)}" rx="2" fill="${color}" opacity="${i===data.length-1?1:.75}"><title>${d.tip||d.lbl}: ${cur?money(d.v):d.v.toLocaleString()}</title></rect><text x="${x+bw*.32}" y="${H-8}" text-anchor="middle" font-size="10" fill="var(--muted)">${d.lbl}</text>`});
   return`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Bar chart" style="width:100%;height:auto">${s}</svg>`;
 }
 function downloadCsv(which){
@@ -406,6 +406,57 @@ function downloadCsv(which){
   const csv=rows.map(r=>r.map(v=>{v=String(v??'');return/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(',')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`cargo420-orders-${which}-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();a.remove();
 }
+/* ---------- analytics: visits + site speed ---------- */
+let aDays=30;const AN={};
+const PAGE_LBL={home:'Home',shop:'Shop all',drop:'Drop page',specials:'Happy Hour',members:'Membership',events:'Events',areas:'Service area',checkout:'Checkout',done:'Order placed',liked:'Most liked',indica:'Indica',sativa:'Sativa',hybrid:'Hybrid'};
+const pageLbl=p=>PAGE_LBL[p]||(typeof catName==='function'&&CATS.some(c=>c.id===p)?catName(p):p);
+const SPEED={lcp:[2500,4000,'Main content shows'],fcp:[1800,3000,'First paint'],ttfb:[800,1800,'Server response'],load:[3000,6000,'Fully loaded'],inp:[200,500,'Tap response'],cls:[.1,.25,'Layout stability']};
+const rate=(k,v)=>v==null?'na':v<=SPEED[k][0]?'good':v<=SPEED[k][1]?'ok':'poor';
+const fmtMs=v=>v==null?'—':v<1000?Math.round(v)+' ms':(v/1000).toFixed(1)+' s';
+async function loadAnalytics(force){
+  if(AN[aDays]&&!force&&Date.now()-AN[aDays].t<60e3)return AN[aDays].d;
+  const {data,error}=await sb.rpc('site_analytics',{p_days:aDays});if(error)throw error;AN[aDays]={t:Date.now(),d:data};return data;
+}
+function aAnalytics(B){
+  B.innerHTML=`<div class="loading">Loading analytics…</div>`;
+  loadAnalytics().then(d=>{if(tab==='analytics')drawAnalytics(B,d)}).catch(e=>{B.innerHTML=`<div class="warnbox">Couldn't load analytics. ${esc(errMsg(e))}</div>`});
+}
+function drawAnalytics(B,d){
+  const pct=(a,b)=>b?Math.round((a-b)/b*100):null;const ch=pct(d.visitors,d.prev_visitors);
+  const conv=d.visitors?(d.orders/d.visitors*100):0;
+  const daily=[];for(let i=aDays-1;i>=0;i--){const t=new Date();t.setDate(t.getDate()-i);const k=t.toLocaleDateString('en-CA',{timeZone:'America/Detroit'});const r=d.daily.find(x=>x.d===k);const every=aDays<=7?1:aDays<=30?5:15;daily.push({lbl:(aDays-1-i)%every===0||i===0?t.toLocaleDateString('en-US',aDays<=7?{weekday:'short'}:{month:'numeric',day:'numeric'}):'',tip:t.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}),v:r?r.visitors:0})}
+  const hrs=[];for(let h=8;h<=23;h++)hrs.push({lbl:h%2?'':(h>12?(h-12)+'p':h===12?'12p':h+'a'),tip:(h%12||12)+(h<12?'am':'pm'),v:Number((d.hours||{})[h]||0)});
+  const list=(rows,lbl,val)=>{const mx=Math.max(1,...rows.map(val));return rows.length?rows.map(r=>`<div><div class="row" style="justify-content:space-between;font-size:13px"><span>${esc(lbl(r))}</span><span class="num">${val(r).toLocaleString()}</span></div><div class="an-bar"><i style="width:${Math.max(2,val(r)/mx*100)}%"></i></div></div>`).join(''):'<p class="note" style="margin:0">No data yet.</p>'};
+  const split=o=>{const tot=Object.values(o).reduce((a,b)=>a+b,0)||1;return Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="an-chip"><b>${Math.round(v/tot*100)}%</b> ${esc(k[0].toUpperCase()+k.slice(1))}</span>`).join('')||'<span class="note">—</span>'};
+  const P=d.perf||{};const n=P.samples||0;
+  const card=k=>{const v=P[k==='load'?'load':k];const r=rate(k,v);return`<div class="sp-m sp-${r}"><div class="l">${SPEED[k][2]}</div><div class="v">${k==='cls'?(v==null?'—':Number(v).toFixed(2)):fmtMs(v)}</div><div class="s">${r==='good'?'Good':r==='ok'?'Needs work':r==='poor'?'Slow':'No data yet'}</div></div>`};
+  const lr=rate('lcp',P.lcp);
+  const verdict=!n?'Speed data starts collecting with the next visits. Check back after a few dozen customers have loaded the site.':lr==='good'?`Fast. 3 out of 4 visits show the main content in ${fmtMs(P.lcp)} or less (Google's target is under 2.5 s).`:lr==='ok'?`Okay, but some visitors wait. 3 out of 4 visits show the main content in ${fmtMs(P.lcp)}; Google's target is under 2.5 s.`:`Slow for many visitors. 3 out of 4 visits take up to ${fmtMs(P.lcp)} to show the main content; Google's target is under 2.5 s.`;
+  const pd=d.perf_device||{};
+  B.innerHTML=`<div class="an" style="display:grid;gap:16px">
+   <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div class="seg">${[7,30,90].map(x=>`<button class="${aDays===x?'on':''}" data-adays="${x}">${x} days</button>`).join('')}</div><span class="note" style="margin:0"><span class="an-live"></span>${d.live_now} on the site now · ${d.today_visitors} visitors today <button class="linkbtn" data-arefresh="1">Refresh</button></span></div>
+   <div class="kpis">
+    <div class="kpi"><div class="l">Visitors</div><div class="v">${d.visitors.toLocaleString()}</div><div class="an-sub">${ch==null?'first period tracked':`<b class="${ch>=0?'up':'down'}">${ch>=0?'▲':'▼'} ${Math.abs(ch)}%</b> vs previous ${aDays} days`}</div></div>
+    <div class="kpi"><div class="l">Page views</div><div class="v">${d.views.toLocaleString()}</div><div class="an-sub">${d.sessions?(d.views/d.sessions).toFixed(1):'0'} pages per visit</div></div>
+    <div class="kpi cash"><div class="l">Visit → order</div><div class="v">${conv.toFixed(1)}%</div><div class="an-sub">${d.orders} online orders · ${d.checkout_visitors} reached checkout</div></div>
+    <div class="kpi"><div class="l">Bounce rate</div><div class="v">${d.bounce??0}%</div><div class="an-sub">left after one page</div></div>
+   </div>
+   <div class="chart"><div class="eyebrow">Visitors per day</div>${bars(daily,'var(--yellow)',false,innerWidth<700?520:1100,innerWidth<700?240:220)}</div>
+   <div class="cols">
+    <div class="chart"><div class="eyebrow">Top pages</div><div style="display:grid;gap:8px;margin-top:10px">${list(d.pages,r=>pageLbl(r.path),r=>r.views)}</div></div>
+    <div class="chart"><div class="eyebrow">Where visitors come from</div><div style="display:grid;gap:8px;margin-top:10px">${list(d.referrers,r=>r.src,r=>r.visitors)}</div></div>
+   </div>
+   <div class="cols">
+    <div class="chart"><div class="eyebrow">Busiest hours (page views)</div>${bars(hrs,'var(--green)',false)}</div>
+    <div class="chart" style="display:grid;gap:12px;align-content:start"><div class="eyebrow">Devices</div><div class="an-chips">${split(d.devices||{})}</div><div class="eyebrow">Browsers</div><div class="an-chips">${split(d.browsers||{})}</div></div>
+   </div>
+   <h2 style="font-size:26px;margin-top:6px">Website speed</h2>
+   <div class="chart sp-verdict sp-${n?lr:'na'}"><b>${!n?'Collecting':lr==='good'?'Fast':lr==='ok'?'Okay':'Slow'}</b><span>${verdict}</span></div>
+   <div class="sp-grid">${['lcp','fcp','ttfb','load','inp','cls'].map(card).join('')}</div>
+   <p class="note" style="margin:0">Measured on real customer visits (${n} page loads in this period). Each number is what 3 out of 4 visitors got or better.${Object.keys(pd).length?' By device: '+Object.entries(pd).map(([k,v])=>`${esc(k)} ${fmtMs(v.lcp)} (${v.n} loads)`).join(' · ')+'.':''}</p>
+  </div>`;
+}
+
 /* ---------- settings ---------- */
 function aSettings(B){
   B.innerHTML=`<section class="team" id="teamwrap"><p class="note">Loading team…</p></section><form class="form" id="setf" style="max-width:820px"><h2 style="font-size:26px">Store</h2>
@@ -469,6 +520,8 @@ document.addEventListener('click',async e=>{
   if(t.dataset.pdel){$('#pdel-c').hidden=false;return}
   if(t.dataset.pdelyes){const {error}=await sb.from('products').delete().eq('id',t.dataset.pdelyes);if(error)return toast('Not deleted',errMsg(error));A.products=A.products.filter(p=>p.id!==t.dataset.pdelyes);editing=null;dEditing=null;render();return}
   if(t.dataset.csv){downloadCsv(t.dataset.csv);return}
+  if(t.dataset.adays){aDays=+t.dataset.adays;aAnalytics($('#admbody'));return}
+  if(t.dataset.arefresh){delete AN[aDays];aAnalytics($('#admbody'));return}
 });
 document.addEventListener('change',async e=>{
   const t=e.target;

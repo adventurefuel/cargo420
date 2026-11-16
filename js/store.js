@@ -29,6 +29,39 @@ async function loadAll(){
   try{const [ps,nf]=await Promise.all([sb.from('promo_settings').select('*').eq('id',1).single(),sb.rpc('next_free_order')]);D.promo=ps.data||{ref_new:10,ref_reward:10,win_cap:100};D.nextFree=nf.data||null}catch(e){D.promo={ref_new:10,ref_reward:10,win_cap:100};D.nextFree=null}
 }
 
+/* ---------- visit + speed analytics (first-party, no cookies, no IP stored) ---------- */
+const TRK=(()=>{
+  const off=/localhost|127\.0\.0\.1/.test(location.hostname)||navigator.webdriver||/bot|crawl|spider|lighthouse|headless|preview/i.test(navigator.userAgent);
+  const rid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)).replace(/-/g,'').slice(0,24);
+  let vid='',sid='';try{vid=localStorage.getItem('c420vid')||'';if(!vid){vid=rid();localStorage.setItem('c420vid',vid)}
+    const ss=JSON.parse(sessionStorage.getItem('c420sid')||'null');sid=ss&&Date.now()-ss.t<30*60e3?ss.id:rid();}catch(e){vid=vid||rid();sid=sid||rid()}
+  const touch=()=>{try{sessionStorage.setItem('c420sid',JSON.stringify({id:sid,t:Date.now()}))}catch(e){}};touch();
+  const ua=navigator.userAgent;
+  const device=/iPad|Tablet/i.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1)?'tablet':/Mobi|Android|iPhone/i.test(ua)?'mobile':'desktop';
+  const browser=/Edg\//.test(ua)?'Edge':/SamsungBrowser/.test(ua)?'Samsung':/CriOS|Chrome\//.test(ua)?'Chrome':/FxiOS|Firefox\//.test(ua)?'Firefox':/Safari\//.test(ua)?'Safari':'Other';
+  const app=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+  const ref=(()=>{try{const u=new URL(location.href).searchParams.get('utm_source');if(u)return u.slice(0,60);if(app)return'Home-screen app';if(!document.referrer)return'';const h=new URL(document.referrer).hostname.replace(/^www\./,'');return/exclusivedeliveryservices\.com|cargo420\.onrender\.com/.test(h)?'':h}catch(e){return''}})();
+  const rpc=(fn,body)=>fetch(CFG.SUPABASE_URL+'/rest/v1/rpc/'+fn,{method:'POST',keepalive:true,headers:{'Content-Type':'application/json',apikey:CFG.SUPABASE_KEY,Authorization:'Bearer '+CFG.SUPABASE_KEY},body:JSON.stringify(body)}).then(r=>r.ok?r.json():null).catch(()=>null);
+  let first=true,firstId=null,last='';
+  // speed: measured once per full page load, sent when the visitor leaves or after 12s
+  const m={lcp:null,cls:0,inp:null};
+  try{new PerformanceObserver(l=>{const e=l.getEntries();m.lcp=Math.round(e[e.length-1].startTime)}).observe({type:'largest-contentful-paint',buffered:true})}catch(e){}
+  try{new PerformanceObserver(l=>{l.getEntries().forEach(e=>{if(!e.hadRecentInput)m.cls+=e.value})}).observe({type:'layout-shift',buffered:true})}catch(e){}
+  try{new PerformanceObserver(l=>{l.getEntries().forEach(e=>{if(e.interactionId)m.inp=Math.max(m.inp||0,Math.round(e.duration))})}).observe({type:'event',buffered:true,durationThreshold:40})}catch(e){}
+  let sent=false;
+  const sendPerf=async()=>{if(off||sent)return;const id=await firstIdP;if(!id)return;sent=true;
+    const n=performance.getEntriesByType('navigation')[0]||{},fcp=(performance.getEntriesByName('first-contentful-paint')[0]||{}).startTime;
+    rpc('track_perf',{p_id:id,p_visitor:vid,p_ttfb:n.responseStart?Math.round(n.responseStart):null,p_fcp:fcp!=null?Math.round(fcp):null,p_lcp:m.lcp,p_load:n.loadEventEnd?Math.round(n.loadEventEnd):null,p_cls:Math.round(m.cls*1000)/1000,p_inp:m.inp,p_conn:(navigator.connection&&navigator.connection.effectiveType)||null})};
+  let resolveFirst;const firstIdP=new Promise(r=>resolveFirst=r);
+  addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')sendPerf()});
+  addEventListener('pagehide',sendPerf);
+  addEventListener('load',()=>setTimeout(sendPerf,12000));
+  return{view(path){if(off)return;path=(path||'home').toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,30)||'home';if(path===last)return;last=path;touch();
+    const p=rpc('track_view',{p_visitor:vid,p_session:sid,p_path:path,p_referrer:first?ref:null,p_device:device,p_browser:browser,p_first:first});
+    if(first){first=false;p.then(id=>resolveFirst(id))}}};
+})();
+function trackView(h){TRK.view(h)}
+
 /* ---------- routing ---------- */
 let route='home',shopFilter={type:'all',val:null},sortBy='newest',q='';
 const STRAINS=[{id:'indica',name:'Indica',sub:'Relax · body high'},{id:'sativa',name:'Sativa',sub:'Uplift · head high'},{id:'hybrid',name:'Hybrid',sub:'Best of both'}];
@@ -40,6 +73,7 @@ const strainOf=p=>(p.strain||'').trim().toLowerCase();
 const strainName=id=>(STRAINS.find(x=>x.id===id)||{}).name||id;
 function go(){
   const h=(location.hash||'#home').slice(1);
+  try{trackView(h)}catch(e){}
   if(h==='happyhour')location.replace('#specials');
   route=['home','shop','drop','specials','members','events','areas','checkout','done'].includes(h)?h:'home';
   if(CATS.some(c=>c.id===h)){route='shop';shopFilter={type:'cat',val:h};q='';const hi=$('#hq');if(hi)hi.value=''}
