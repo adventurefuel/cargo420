@@ -488,6 +488,7 @@ function vMembers(V){
   <div class="tiers">${D.tiers.map((t,i)=>`<div class="tier ${i===1?'hot':''}"><span class="eyebrow">${i===1?'Most popular':'Tier '+(i+1)}</span><h3>${esc(t.name)}</h3><div class="price">$${Number(t.price)}<small> / month</small></div><ul>${t.perks.map(p=>`<li>${esc(p)}</li>`).join('')}</ul><button class="btn ${i===1?'':'ghost'}" data-tier="${t.id}">Apply for ${esc(t.name)}</button></div>`).join('')}</div>
   <form class="form" id="memf" novalidate><h2 style="font-size:30px">Membership application</h2>
    <div class="two"><label>Full name<input id="m-name" required autocomplete="name"></label><label>Mobile number<input id="m-phone" inputmode="tel" autocomplete="tel" required placeholder="(313) 555-0100"></label></div>
+   <label>Date of birth<input id="m-dob" type="date" required autocomplete="bday" max="${new Date(Date.now()-21*365.25*864e5).toISOString().slice(0,10)}"></label>
    <label>Tier<select id="m-tier">${D.tiers.map(t=>`<option value="${t.id}">${esc(t.name)} · $${Number(t.price)}/mo</option>`).join('')}</select></label>
    <label class="check"><input type="checkbox" id="m-age"> <span>I'm 21+ and understand dues are paid to my driver each month.</span></label>
    <div id="m-err" class="warnbox" hidden></div>
@@ -496,8 +497,12 @@ function vMembers(V){
 async function applyMember(f){
   const name=$('#m-name').value.trim(),ph=$('#m-phone').value,err=$('#m-err');err.hidden=true;
   if(!name||ph.replace(/\D/g,'').length<10){err.hidden=false;err.textContent='Add your name and a 10-digit mobile number.';return}
+  const dob=$('#m-dob').value;
+  if(!dob){err.hidden=false;err.textContent='Add your date of birth.';return}
+  const b=new Date(dob+'T12:00'),n=new Date(),age=n.getFullYear()-b.getFullYear()-((n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate()))?1:0);
+  if(age<21){err.hidden=false;err.textContent='You must be 21 or older to become a member.';return}
   if(!$('#m-age').checked){err.hidden=false;err.textContent='Confirm you are 21+ and agree to monthly dues.';return}
-  const {data,error}=await sb.rpc('apply_membership',{p_name:name,p_phone:ph,p_tier:$('#m-tier').value});
+  const {data,error}=await sb.rpc('apply_membership',{p_name:name,p_phone:ph,p_tier:$('#m-tier').value,p_birthdate:dob});
   if(error){err.hidden=false;err.textContent=errMsg(error);return}
   f.innerHTML=`<h2 style="font-size:30px">Application received</h2><p class="lede" style="margin:0">Thanks, ${esc(name.split(' ')[0])}. We'll call ${esc(data.phone)} to confirm. Your first month is collected with your next delivery.</p>`;
 }
