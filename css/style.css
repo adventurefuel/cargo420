@@ -778,3 +778,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
   .strainbtn small{display:none}
 }
 @media(max-width:600px){.dropfeat .df-name{white-space:normal;overflow:visible;text-overflow:clip;font-size:17px;line-height:1.1}}
+.nav a.navdrop::before{display:none}
+/* Shop all fills the row when it would sit alone */
+@media (min-width:901px){.catgrid .catbtn.all:nth-child(4n+1){grid-column:1/-1;min-height:96px}}
+@media (max-width:900px){.catgrid .catbtn.all:nth-child(odd){grid-column:1/-1;min-height:96px}}
