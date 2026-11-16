@@ -76,6 +76,7 @@ function go(){
   const h=(location.hash||'#home').slice(1);
   try{trackView(h)}catch(e){}
   if(h==='happyhour')location.replace('#specials');
+  if(h.startsWith('track/')){const [,c,t]=h.split('/');trackKey={code:decodeURIComponent(c||''),token:t||''};route='track';render();window.scrollTo(0,0);return}
   route=['home','shop','drop','specials','members','events','areas','checkout','done','app'].includes(h)?h:'home';
   if(CATS.some(c=>c.id===h)){route='shop';shopFilter={type:'cat',val:h};q='';const hi=$('#hq');if(hi)hi.value=''}
   if(h==='liked'||STRAINS.some(x=>x.id===h)){route='shop';shopFilter=h==='liked'?{type:'feat',val:null}:{type:'strain',val:h};q='';const hi=$('#hq');if(hi)hi.value=''}
@@ -87,9 +88,9 @@ function render(){
   const b=$('#banner');
   if(!D.settings.open){b.className='banner closed';b.textContent='We are closed right now and not taking orders. Hours: '+D.settings.hours}
   else{b.className='banner';b.textContent=(bogoOn()?'LAUNCH WEEK: Buy one, get one 50% off · ':'')+`Pay at the door: Cash · Cash App $420Cargo · Card tap · $${Number(D.settings.base_min)} minimum on every order · Valid 21+ ID checked at delivery · Hours ${D.settings.hours}`}
-  stopDropTimers();
+  stopDropTimers();stopTrack();
   drawCatbar();
-  ({home:vHome,shop:vShop,drop:vDrop,specials:vSpecials,members:vMembers,events:vEvents,areas:vAreas,checkout:vCheckout,done:vDone,app:vApp}[route])($('#view'));
+  ({home:vHome,shop:vShop,drop:vDrop,specials:vSpecials,members:vMembers,events:vEvents,areas:vAreas,checkout:vCheckout,done:vDone,app:vApp,track:vTrack}[route])($('#view'));
   drawAppNudge();
   saveCart();
 }
@@ -145,7 +146,7 @@ function freeCounter(){const n=D.nextFree;if(!n||!(Number(n.cap)>0))return'';ret
 function vHome(V){
   V.innerHTML=`<div class="wrap">
   <section class="hero"><img src="img/logo.webp" alt="Cargo+420 Exclusive Delivery Service"><p>Metro Detroit cannabis delivery. Pick a category, build your order, pay at the door with cash, Cash App or card.</p>
-   ${bogoStrip()}${dropFeature()}${freeCounter()}
+   ${activeOrderStrip()}${bogoStrip()}${dropFeature()}${freeCounter()}
    <button class="zipchip" id="zipchip">${myZip?`${ICONS.pin}<span>Delivering to <b>${esc(myZip.city)} ${esc(myZip.zip)}</b></span><u>Change</u>`:`${ICONS.pin}<span>Do we deliver to you?</span><u>Check your ZIP</u>`}</button></section>
   <nav class="catgrid" aria-label="Shop by category">
    ${HOME_CATS.filter(id=>shopItems().some(p=>p.cat===id)).map(id=>{const c=CATS.find(x=>x.id===id);return`<a class="catbtn" href="#${id}">${ICONS[id]}<span>${c.name}</span><small>${c.blurb}</small></a>`}).join('')}
@@ -237,7 +238,7 @@ function vApp(V){
    <div class="ap-hero">
     <div class="ap-stage">${appPhone()}
      <span class="ap-call c1"><b>One tap</b> to the menu</span>
-     <span class="ap-call c2"><b>Drop alerts</b> first</span>
+     <span class="ap-call c2"><b>Live</b> order ETA</span>
      <span class="ap-call c3"><b>Saved</b> checkout</span>
     </div>
     <div class="ap-intro"><span class="eyebrow">Free · no app store needed</span><h1>Get the Cargo+420 app</h1>
@@ -252,7 +253,7 @@ function vApp(V){
    <div id="apsteps">${appSteps(kind)}</div>
    <div class="ap-why">
     <div><b>Faster reorders</b><span>Your details are remembered on this phone.</span></div>
-    <div><b>Drop alerts</b><span>Be first to the next numbered drop.</span></div>
+    <div><b>Live tracking</b><span>See when your driver is on the way and the ETA.</span></div>
     <div><b>No download</b><span>Takes no storage and always has the latest menu.</span></div>
    </div>
    <a class="btn" href="#shop">Start shopping →</a>
@@ -537,8 +538,46 @@ async function placeOrder(){
   placing=false;
   if(error){e.hidden=false;e.textContent=errMsg(error);b.disabled=false;refreshQuote();return}
   if(co.sms||co.email)sb.rpc('set_marketing_prefs',{p_phone:co.phone,p_email:co.email||null,p_sms_optin:!!co.sms}).then(()=>{},()=>{});
+  try{const L=store.get('c420orders',[]).filter(x=>x.code!==data.code);L.unshift({code:data.code,track:data.track,at:Date.now()});store.set('c420orders',L.slice(0,5))}catch(e){}
   store.set('c420last',{...data,name:co.name,phone:co.phone,pay:co.pay||'cash'});try{localStorage.removeItem('c420ref')}catch(e){};co.ref='';store.set('c420co',{...co,age:undefined});cart=[];saveCart();
   loadAll().catch(()=>{});location.hash='#done';
+}
+/* ---------- live order tracking ---------- */
+let trackKey=null,trkPoll=null,trkTick=null,trkData=null;
+function stopTrack(){clearInterval(trkPoll);clearInterval(trkTick);trkPoll=trkTick=null}
+async function fetchTrack(code,token){const {data,error}=await sb.rpc('track_order',{p_code:code,p_token:token});if(error)throw error;return data}
+function startTrack(code,token){
+  stopTrack();const load=async()=>{try{const d=await fetchTrack(code,token);trkData=d?{...d,skew:Date.now()-new Date(d.now).getTime()}:null;drawTrack();if(d&&['delivered','cancelled'].includes(d.status))clearInterval(trkPoll)}catch(e){}};
+  load();trkPoll=setInterval(()=>{if(!document.hidden)load()},20000);trkTick=setInterval(drawTrack,15000);
+}
+const tTime=d=>new Date(d).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Detroit'});
+function drawTrack(){
+  const el=$('#trk');if(!el)return;const d=trkData;
+  if(!d){el.innerHTML='<div class="warnbox">We couldn\'t find that order. Check the link from your confirmation, or call us.</div>';return}
+  const S=['new','confirmed','out','delivered'],i=S.indexOf(d.status);
+  const now=Date.now()-(d.skew||0),eta=d.eta_at?new Date(d.eta_at).getTime():null,mins=eta?Math.round((eta-now)/60000):null;
+  let head,sub;
+  if(d.status==='cancelled'){head='Order cancelled';sub='This order was cancelled. Call or text us if that\'s a surprise.'}
+  else if(d.status==='delivered'){head='Delivered';sub=`Dropped off at ${tTime(d.delivered_at||now)}. Enjoy, ${esc(d.first_name||'')}.`}
+  else if(d.status==='out'){head=mins==null?'On the way':mins>1?`Arriving in about ${mins} min`:'Arriving any minute';sub=`${d.driver?esc(d.driver)+' is':'Your driver is'} on the way${eta?` · expected by ${tTime(eta)}`:''}. Have your 21+ ID and payment ready.`}
+  else if(d.status==='confirmed'){head='Confirmed · getting it ready';sub=`${d.driver?esc(d.driver)+' is your driver. ':''}You'll see a live ETA here as soon as they head out.`}
+  else{head='Order received';sub='We\'ll call or text to confirm in a few minutes.'}
+  const steps=[['Received',d.created_at],['Confirmed',d.confirmed_at],['On the way',d.out_at],['Delivered',d.delivered_at]];
+  const pct=d.status==='out'&&eta&&d.out_at?Math.max(6,Math.min(96,(now-new Date(d.out_at).getTime())/(eta-new Date(d.out_at).getTime())*100)):0;
+  el.className=`trk s-${d.status}`;
+  el.innerHTML=`<div class="trk-head"><span class="trk-dot"></span><div><b>${head}</b><span>${sub}</span></div></div>
+   ${d.status!=='cancelled'?`<ol class="trk-steps">${steps.map((s,k)=>`<li class="${k<i?'done':k===i?'on':''}"><i>${k<i||d.status==='delivered'?'✓':k+1}</i><b>${s[0]}</b><small>${s[1]&&k<=i?tTime(s[1]):''}</small></li>`).join('')}</ol>`:''}
+   ${d.status==='out'&&eta?`<div class="trk-road"><span class="trk-car" style="left:${pct}%"><svg viewBox="0 0 32 20"><path d="M3 13l2-6a3 3 0 0 1 3-2h12a3 3 0 0 1 2.6 1.5L25 10h3a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1H3z" fill="#f7c31b" stroke="#000" stroke-width="1.4"/><circle cx="9" cy="15" r="2.6" fill="#000"/><circle cx="23" cy="15" r="2.6" fill="#000"/></svg></span><span class="trk-home">⌂</span></div>`:''}
+   <div class="trk-foot"><span class="mono">${esc(d.code)}</span><span>${d.items.map(x=>x.qty+'× '+esc(x.name)).join(' · ')}</span><b class="num">${money(d.total)}</b></div>`;
+}
+function vTrack(V){
+  const k=trackKey||{};
+  V.innerHTML=`<div class="wrap page"><span class="eyebrow">Live order tracking</span><h1>Your order</h1><div id="trk" class="trk" style="max-width:640px"><p class="note">Loading…</p></div><p style="margin-top:18px"><a class="btn ghost" href="#shop" style="text-decoration:none">Back to the menu</a></p></div>`;
+  if(k.code&&k.token)startTrack(k.code,k.token);else{trkData=null;drawTrack()}
+}
+function activeOrderStrip(){
+  const L=store.get('c420orders',[]).filter(x=>x.track&&Date.now()-x.at<8*3600e3);if(!L.length)return'';
+  return`<a class="trk-strip" href="#track/${esc(L[0].code)}/${esc(L[0].track)}"><span class="trk-dot"></span><b>Track your order ${esc(L[0].code)}</b><u>Live status →</u></a>`;
 }
 function vDone(V){
   const o=store.get('c420last',null);if(!o){location.hash='#home';return}
@@ -546,12 +585,14 @@ function vDone(V){
   V.innerHTML=`<div class="wrap page">
   ${Number(o.free_win)?`<div class="winner"><small>🎉 Order #${esc(o.code)}</small><b>You hit the 420!</b><span>We took ${money(o.free_win)} off this order. Every order number ending in 420 is free, up to $${Number(D.promo?.win_cap||100)}.</span></div>`:''}
   <span class="eyebrow">Order received</span><h1>Thanks, ${esc(o.name.split(' ')[0])}</h1>
-  <p class="lede">Order <b class="mono">${esc(o.code)}</b> is in. We'll call or text ${esc(o.phone)} to confirm, then your driver will send an ETA.</p>
+  <p class="lede">Order <b class="mono">${esc(o.code)}</b> is in. We'll call or text ${esc(o.phone)} to confirm. ${o.track?'Follow it live below. This page updates by itself.':'Your driver will send an ETA.'}</p>
+  ${o.track?`<div id="trk" class="trk" style="max-width:640px"><p class="note">Loading your order status…</p></div><p class="note" style="margin:-6px 0 18px">Save or share this tracking link: <a href="#track/${esc(o.code)}/${esc(o.track)}">exclusivedeliveryservices.com/#track/${esc(o.code)}/…</a></p>`:''}
   <div class="summary" style="max-width:480px">${Number(o.ref_discount)||Number(o.credit_used)?`<p class="note" style="margin:0;color:var(--green)">${Number(o.ref_discount)?`Referral −${money(o.ref_discount)}. `:''}${Number(o.credit_used)?`Credit −${money(o.credit_used)}.`:''}</p>`:''}<div class="totals"><div class="grand"><span>Due at the door · ${esc(payLabel(o.pay))}</span><span class="num">${money(o.total)}</span></div></div>
   ${o.pay==='cashapp'?`<p class="note" style="margin:0">When your driver arrives, send ${money(o.total)} to <b>$420Cargo</b> on Cash App and show the payment screen.</p><a class="btn cashapp" href="https://cash.app/$420Cargo/${Number(o.total).toFixed(2)}" target="_blank" rel="noopener">Open Cash App · $420Cargo</a>`:o.pay==='card'?`<p class="note" style="margin:0">Your driver will have a Square reader. Tap your card or phone to pay.</p>`:`<p class="note" style="margin:0">Exact change helps.</p>`}
   <p class="note" style="margin:0">Meet your driver at their vehicle with a valid 21+ ID.</p></div>
   ${o.my_code?`<div class="refbox"><div><small>Your referral code</small><b class="mono">${esc(o.my_code)}</b></div><p>Give friends $${Number(o.ref_new||10)} off their first order. You get $${Number(o.ref_reward||10)} credit when it's delivered, applied to your next order automatically.</p><div class="row"><button class="btn" id="copyref" data-link="${esc(link)}">Copy my link</button><span class="note mono" id="reflink">${esc(link)}</span></div></div>`:''}
   <p style="margin-top:22px"><a class="btn ghost" href="#shop" style="text-decoration:none">Back to the menu</a></p></div>`;
+  if(o.track)startTrack(o.code,o.track);
 }
 
 /* ---------- cargo drop ---------- */

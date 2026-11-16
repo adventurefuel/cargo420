@@ -212,7 +212,7 @@ function aOrders(B){
     <select data-drv="${o.id}" aria-label="Assign driver"><option value="">Assign driver</option>${A.drivers.filter(d=>d.active||d.id===o.driver_id).map(d=>`<option value="${d.id}" ${o.driver_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
     ${o.status==='new'?`<button class="btn sm" data-st="${o.id}" data-to="confirmed">Confirm order</button>`:''}
     ${o.status==='confirmed'?`<button class="btn sm" data-st="${o.id}" data-to="out" ${o.driver_id?'':'disabled title="Assign a driver first"'}>Send out</button>`:''}
-    ${o.status==='out'?`<button class="btn green sm" data-st="${o.id}" data-to="delivered">Delivered · paid</button>`:''}
+    ${o.status==='out'?`<span class="eta-row"><span>${o.eta_at?'ETA '+etaTxt(o):'ETA'}:</span>${[10,20,30,45].map(m=>`<button class="btn ghost sm" data-oeta="${m}" data-o="${o.id}">${m}m</button>`).join('')}</span><button class="btn green sm" data-st="${o.id}" data-to="delivered">Delivered · paid</button>`:''}
     <button class="btn red sm" data-cancel="${o.id}">Cancel</button>`}</div>
   </article>`}).join('')||'<p class="note">No orders here right now. New orders appear at the top with a chime and a phone alert.</p>'}</div></div>`;
 }
@@ -518,6 +518,7 @@ document.addEventListener('click',async e=>{
   if(t.id==='offpush'){disablePush();return}
   if(t.id==='testpush'){testPush();return}
   if(t.id==='openbtn'){const d=await sb.from('store_settings').update({open:!A.settings.open}).eq('id',1).select().single();if(d.error)return toast('Not saved',errMsg(d.error));A.settings=d.data;toast(A.settings.open?'Store is taking orders':'Store closed','',true);render();return}
+  if(t.dataset.oeta){t.disabled=true;const {data,error}=await sb.rpc('set_order_eta',{p_order:t.dataset.o,p_minutes:+t.dataset.oeta});if(error)toast('ETA not saved',errMsg(error));else{const o=A.orders.find(x=>x.id===t.dataset.o);if(o)o.eta_at=data.eta_at;toast(`ETA set · ${t.dataset.oeta} min`,'The customer sees it on their tracking page.',true)}render();return}
   if(t.dataset.st){t.disabled=true;const o=await upd('orders',t.dataset.st,{status:t.dataset.to});if(o){toast(`${o.code} → ${SL[o.status]}`,'',true);if(o.status==='delivered'){const c=A.customers.find(c=>c.id===o.customer_id);if(c)c.id_verified=true}}render();return}
   if(t.dataset.cancel){if(pendingCancel!==t.dataset.cancel){pendingCancel=t.dataset.cancel;t.textContent='Tap again to cancel';setTimeout(()=>{if(pendingCancel===t.dataset.cancel){pendingCancel=null;t.textContent='Cancel'}},4000);return}
     pendingCancel=null;const o=await upd('orders',t.dataset.cancel,{status:'cancelled'});if(o)toast(`${o.code} cancelled`,'Items were put back in stock.',true);render();return}
@@ -589,7 +590,9 @@ window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h
 boot();
 
 /* ================= DRIVER MODE ================= */
-let DRV=null,DO=[],dTab='available',dPoll=null,dKnown=null,dPend=null;
+let DRV=null,DO=[],dTab='available',dPoll=null,dKnown=null,dPend=null,dEtaFor=null;
+const ETAS=[10,15,20,30,45];
+const etaTxt=o=>o.eta_at?new Date(o.eta_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
 async function driverBoot(d){
   DRV=d;document.title='Cargo+420 Driver';$('#signout').hidden=false;
   const p=await sb.from('products').select('id,name,cat,image_url').eq('active',true);if(p.data)A.products=p.data;
@@ -611,7 +614,8 @@ function drvCard(o){
   if(o.status==='delivered')acts=`<span class="pill p-delivered">Delivered ${new Date(o.delivered_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>`;
   else if(!o.driver_id)acts=`<button class="btn dbtn" data-dact="take" data-o="${o.id}">Take this order</button>`;
   else if(!mine)acts=`<span class="pill p-muted">Taken by ${esc(o.driver_name||'another driver')}</span>`;
-  else if(o.status==='out')acts=`<button class="btn green dbtn" data-dact="delivered" data-o="${o.id}">${dPend===o.id?'Tap again to confirm':'Delivered · '+esc(pay)+' collected'}</button><button class="linkbtn" data-dact="release" data-o="${o.id}">Release</button>`;
+  else if(o.status==='out')acts=`${o.eta_at?`<div class="eta-row"><span>ETA ${etaTxt(o)} · update:</span>${[10,20,30].map(m=>`<button class="btn ghost sm" data-deta="${m}" data-o="${o.id}" data-keep="1">${m}m</button>`).join('')}</div>`:''}<button class="btn green dbtn" data-dact="delivered" data-o="${o.id}">${dPend===o.id?'Tap again to confirm':'Delivered · '+esc(pay)+' collected'}</button><button class="linkbtn" data-dact="release" data-o="${o.id}">Release</button>`;
+  else if(dEtaFor===o.id)acts=`<div class="eta-pick"><b>How long until you get there?</b><div class="row">${ETAS.map(m=>`<button class="btn sm" data-deta="${m}" data-o="${o.id}">${m} min</button>`).join('')}</div><button class="linkbtn" data-etacancel="1">Cancel</button></div>`;
   else acts=`<button class="btn dbtn" data-dact="out" data-o="${o.id}">On my way</button><button class="linkbtn" data-dact="release" data-o="${o.id}">Release</button>`;
   return`<article class="dorder s-${o.status}">
    <div class="do-top"><span class="id">${esc(o.code)}</span><span class="pill p-${o.status}">${o.status==='new'?'Not confirmed yet':SL[o.status]}</span><span class="meta">${ago(o.created_at)}</span></div>
@@ -639,8 +643,15 @@ document.addEventListener('click',async e=>{
   if(!DRV)return;const t=e.target.closest('button');if(!t)return;
   if(t.dataset.dtab){dTab=t.dataset.dtab;drvRender();return}
   if(t.id==='drefresh'){drvLoad();return}
+  if(t.dataset.etacancel){dEtaFor=null;drvRender();return}
+  if(t.dataset.deta){const id=t.dataset.o,m=+t.dataset.deta;t.disabled=true;
+    if(!t.dataset.keep){const r=await sb.rpc('driver_action',{p_order:id,p_action:'out'});if(r.error){toast('Not updated',errMsg(r.error));drvLoad();return}}
+    const {error}=await sb.rpc('set_order_eta',{p_order:id,p_minutes:m});dEtaFor=null;
+    if(error)toast('ETA not saved',errMsg(error));else toast(t.dataset.keep?`ETA updated · ${m} min`:`On the way · customer sees ${m} min ETA`,'',true);
+    drvLoad();return}
   if(t.dataset.dact){
     const a=t.dataset.dact,id=t.dataset.o;
+    if(a==='out'){dEtaFor=id;drvRender();return}
     if(a==='delivered'&&dPend!==id){dPend=id;drvRender();setTimeout(()=>{if(dPend===id){dPend=null;drvRender()}},4000);return}
     dPend=null;t.disabled=true;
     const {error}=await sb.rpc('driver_action',{p_order:id,p_action:a});
