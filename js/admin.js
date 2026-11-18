@@ -7,7 +7,7 @@ const tierName=id=>(A.tiers.find(t=>t.id===id)||{name:id}).name;
 const drvName=id=>(A.drivers.find(d=>d.id===id)||{}).name||'';
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 let ROLE='owner',ROLE_NAME='';
-const ROLE_TABS={owner:null,inventory:['inventory','drops'],marketing:['drops','events','customers','reports','analytics']};
+const ROLE_TABS={owner:null,inventory:['inventory','drops'],marketing:['drops','deals','events','customers','reports','analytics']};
 const ROLE_LABEL={owner:'Owner',driver:'Driver',marketing:'Marketing',inventory:'Inventory'};
 let custQuiet=false,tab='orders',ordFilter='active',custQ='',invQ='',flashIds=new Set(),user=null,channel=null;
 const V=()=>$('#view');
@@ -157,7 +157,7 @@ async function render(){
   const street=A.orders.filter(o=>o.status==='out'&&isCash(o)).reduce((s,o)=>s+Number(o.total),0)+A.orders.filter(o=>o.status==='delivered'&&!o.cash_in&&isCash(o)).reduce((s,o)=>s+Number(o.collected??o.total),0);
   const nNew=A.orders.filter(o=>o.status==='new').length,pend=A.members.filter(m=>m.status==='pending').length,low=A.products.filter(p=>p.active&&p.cat!=='drop'&&p.stock<=3).length;
   const liveDrop=A.products.some(p=>p.cat==='drop'&&p.active&&p.stock>0&&p.drop_at&&new Date(p.drop_at)<=new Date())?'LIVE':0;
-  let tabs=[['orders','Orders',nNew],['customers','Customers'],['drivers','Drivers & cash'],['inventory','Inventory',low],['drops','Drops',liveDrop],['members','Members',pend],['events','Events'],['reports','Reports'],['analytics','Analytics'],['settings','Settings']];
+  let tabs=[['orders','Orders',nNew],['customers','Customers'],['drivers','Drivers & cash'],['inventory','Inventory',low],['drops','Drops',liveDrop],['deals','Deals'],['members','Members',pend],['events','Events'],['reports','Reports'],['analytics','Analytics'],['settings','Settings']];
   if(ROLE_TABS[ROLE]){tabs=tabs.filter(t=>ROLE_TABS[ROLE].includes(t[0]));if(!ROLE_TABS[ROLE].includes(tab))tab=ROLE_TABS[ROLE][0]}
   const owner=ROLE==='owner';
   const ps=owner?await pushState():null;
@@ -176,7 +176,7 @@ async function render(){
    </div>
    <div class="tabs" role="tablist">${tabs.map(([id,l,b])=>`<button role="tab" class="${tab===id?'on':''}" data-tab="${id}">${l}${b?`<span class="b">${b}</span>`:''}</button>`).join('')}</div>
    <div id="admbody"></div></div>`;
-  ({orders:aOrders,customers:aCustomers,drivers:aDrivers,inventory:aInventory,drops:aDrops,members:aMembers,events:aEvents,reports:aReports,analytics:aAnalytics,settings:aSettings}[tab])($('#admbody'));
+  ({orders:aOrders,customers:aCustomers,drivers:aDrivers,inventory:aInventory,drops:aDrops,deals:aDeals,members:aMembers,events:aEvents,reports:aReports,analytics:aAnalytics,settings:aSettings}[tab])($('#admbody'));
   if(!owner)document.querySelectorAll('#admbody [data-cnote],#admbody [data-idv]').forEach(e=>e.disabled=true);
   if(owner&&tab==='settings')loadTeam();
   if(focus&&$('#'+focus)){const el=$('#'+focus);el.focus();if(el.setSelectionRange&&typeof el.value==='string')try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}
@@ -419,6 +419,73 @@ function downloadCsv(which){
   const csv=rows.map(r=>r.map(v=>{v=String(v??'');return/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(',')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`cargo420-orders-${which}-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();a.remove();
 }
+/* ---------- deals: homepage deal ads, price specials, customer push alerts ---------- */
+let DL=null,dlEdit=null,dlDel=null,pushStats=null,pushPend=false;
+const DLINKS=[['#shop','Shop all'],['#flower','Flower'],['#prerolls','Pre-Rolls'],['#edibles','Edibles'],['#vapes','Vapes'],['#liked','Most liked'],['#specials','Happy Hour page'],['#drop','Drop page'],['#members','Membership'],['#app','Get the app']];
+const toLocal=d=>d?new Date(new Date(d).getTime()-new Date(d).getTimezoneOffset()*6e4).toISOString().slice(0,16):'';
+async function loadDeals(){const [d,ps]=await Promise.all([sb.from('deals').select('*').order('sort').order('created_at'),sb.rpc('customer_push_stats')]);if(d.error)throw d.error;DL=d.data;pushStats=ps.data||null}
+function aDeals(B){
+  if(!DL){B.innerHTML='<div class="loading">Loading deals…</div>';loadDeals().then(()=>{if(tab==='deals')aDeals($('#admbody'))}).catch(e=>{B.innerHTML=`<div class="warnbox">Couldn't load deals. ${esc(errMsg(e))}</div>`});return}
+  const P=A.promo||{},now=Date.now();
+  const live=d=>d.active&&(!d.starts_at||new Date(d.starts_at)<=now)&&(!d.ends_at||new Date(d.ends_at)>now);
+  const card=d=>`<div class="dl-item"><a class="deal deal-${esc(d.style)}" href="#" onclick="return false">${d.badge?`<i>${esc(d.badge)}</i>`:''}<b>${esc(d.title)}</b>${d.subtitle?`<span>${esc(d.subtitle)}</span>`:''}<u>${esc(d.cta||'Shop →')}</u></a>
+    <div class="dl-meta"><span class="pill ${live(d)?'p-delivered':'p-muted'}">${live(d)?'Showing now':d.active?'Scheduled':'Hidden'}</span>${d.starts_at||d.ends_at?`<span class="meta">${d.starts_at?new Date(d.starts_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'Now'} → ${d.ends_at?new Date(d.ends_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'no end'}</span>`:''}
+    <span class="row" style="margin-left:auto"><button class="btn ghost sm" data-dlmove="-1" data-id="${d.id}" title="Move up">↑</button><button class="btn ghost sm" data-dlmove="1" data-id="${d.id}" title="Move down">↓</button><button class="btn ghost sm" data-dltog="${d.id}">${d.active?'Hide':'Show'}</button><button class="btn sm" data-dledit="${d.id}">Edit</button><button class="btn red sm" data-dldel="${d.id}">${dlDel===d.id?'Tap to delete':'Delete'}</button></span></div>
+    ${dlEdit===d.id?dealForm(d):''}</div>`;
+  const ps=pushStats||{devices:0,deals:0,members:0,linked:0};
+  B.innerHTML=`<div style="display:grid;gap:18px">
+   <section class="chart" style="display:grid;gap:12px"><div class="row" style="justify-content:space-between"><div><div class="eyebrow">Homepage deals</div><p class="note" style="margin:4px 0 0">These show in the Deals section at the top of the homepage, in this order.</p></div><button class="btn sm" data-dlnew="1">+ Add a deal</button></div>
+    ${dlEdit==='new'?dealForm({title:'',subtitle:'',badge:'',cta:'Shop →',link:'#shop',style:'yellow',active:true}):''}
+    ${DL.length?DL.map(card).join(''):'<p class="note">No deals yet. Add one and it appears on the homepage right away.</p>'}</section>
+   <section class="chart" style="display:grid;gap:10px"><div class="eyebrow">Price specials</div>
+    <div class="dl-bogo"><div><b>Buy one, get one 50% off</b><span class="note">Lower-priced item 50% off, one pair per order. Drops and ${esc((P.bogo_exclude||[]).join(', ')||'no items')} excluded. Doesn't stack with member discounts or referral codes.</span></div>
+     <label class="toggle"><input type="checkbox" id="bg-on" ${P.bogo_enabled?'checked':''}> ${P.bogo_enabled?'On':'Off'}</label></div>
+    <div class="pform"><div class="three"><label>Starts<input id="bg-start" type="datetime-local" value="${toLocal(P.bogo_starts)}"></label><label>Ends<input id="bg-end" type="datetime-local" value="${toLocal(P.bogo_ends)}"></label><label>Half-off item gets (% off)<input id="bg-pct" type="number" min="5" max="100" value="${Number(P.bogo_pct||50)}"></label></div></div>
+    <div class="row"><button class="btn sm" data-bgsave="1">Save special</button><span class="note">When it's on and the dates are current, it prices automatically at checkout and adds a yellow BOGO card to the homepage deals.</span></div></section>
+   <section class="chart" style="display:grid;gap:12px"><div class="eyebrow">Push alerts to customers</div>
+    <div class="kpis"><div class="kpi"><div class="l">Phones with alerts on</div><div class="v">${ps.devices}</div></div><div class="kpi"><div class="l">Get deal alerts</div><div class="v">${ps.deals}</div></div><div class="kpi"><div class="l">Linked to a customer</div><div class="v">${ps.linked}</div></div><div class="kpi cash"><div class="l">Members reachable</div><div class="v">${ps.members}</div></div></div>
+    <p class="note" style="margin:0">Order updates (confirmed, on the way with ETA, delivered) go out automatically. Use this to announce drops and deals. Keep it to a few a week so people keep alerts on.</p>
+    <div class="pform"><div class="two"><label>Title <small class="note">(max 60)</small><input id="pa-title" maxlength="60" placeholder="Drop #064 is live"></label><label>Opens<select id="pa-link">${DLINKS.map(([v,l])=>`<option value="/${v}">${l}</option>`).join('')}</select></label></div>
+     <label>Message <small class="note">(max 160)</small><textarea id="pa-body" rows="2" maxlength="160" placeholder="25 bags only. Tap to cop yours before they're gone."></textarea></label>
+     <div class="row pa-aud"><label><input type="radio" name="pa-aud" value="all" checked> Everyone with alerts on (${ps.deals})</label><label><input type="radio" name="pa-aud" value="members"> Members only (${ps.members})</label></div>
+     <div class="row"><button class="btn" data-pasend="1">${pushPend?'Tap again to send now':'Send alert'}</button><span class="note" id="pa-res"></span></div></div></section>
+  </div>`;
+}
+function dealForm(d){const id=d.id||'new';return`<div class="pform dl-form" data-dlform="${id}">
+  <div class="two"><label>Headline<input id="dl-title" maxlength="60" required value="${esc(d.title)}" placeholder="2 free pre-rolls on $50+"></label><label>Small label <small class="note">(optional)</small><input id="dl-badge" maxlength="24" value="${esc(d.badge||'')}" placeholder="This week only"></label></div>
+  <label>Details line <small class="note">(optional)</small><input id="dl-sub" maxlength="110" value="${esc(d.subtitle||'')}" placeholder="Every order over $50 · pick at checkout"></label>
+  <div class="three"><label>Button text<input id="dl-cta" maxlength="20" value="${esc(d.cta||'Shop →')}"></label><label>Button goes to<select id="dl-link">${DLINKS.map(([v,l])=>`<option value="${v}" ${d.link===v?'selected':''}>${l}</option>`).join('')}</select></label><label>Color<select id="dl-style">${[['yellow','Yellow'],['black','Black'],['green','Green']].map(([v,l])=>`<option value="${v}" ${d.style===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
+  <div class="three"><label>Start <small class="note">(blank = now)</small><input id="dl-start" type="datetime-local" value="${toLocal(d.starts_at)}"></label><label>End <small class="note">(blank = no end)</small><input id="dl-end" type="datetime-local" value="${toLocal(d.ends_at)}"></label><label class="toggle" style="align-self:end"><input type="checkbox" id="dl-active" ${d.active?'checked':''}> Show on homepage</label></div>
+  <div class="row"><button class="btn sm" data-dlsave="${id}">Save deal</button><button class="btn ghost sm" data-dlcancel="1">Cancel</button></div></div>`}
+document.addEventListener('click',async e=>{
+  if(DRV)return;const t=e.target.closest('button');if(!t||tab!=='deals')return;const B=$('#admbody');
+  if(t.dataset.dlnew){dlEdit='new';aDeals(B);return}
+  if(t.dataset.dlcancel){dlEdit=null;aDeals(B);return}
+  if(t.dataset.dledit){dlEdit=t.dataset.dledit;aDeals(B);return}
+  if(t.dataset.dlsave){const id=t.dataset.dlsave,v=x=>$('#'+x).value.trim();
+    const rec={title:v('dl-title'),badge:v('dl-badge')||null,subtitle:v('dl-sub')||null,cta:v('dl-cta')||'Shop →',link:v('dl-link'),style:v('dl-style'),starts_at:v('dl-start')?new Date(v('dl-start')).toISOString():null,ends_at:v('dl-end')?new Date(v('dl-end')).toISOString():null,active:$('#dl-active').checked};
+    if(!rec.title)return toast('Add a headline','',false);
+    t.disabled=true;const r=id==='new'?await sb.from('deals').insert({...rec,sort:(DL.length?Math.max(...DL.map(d=>d.sort))+1:0)}).select().single():await sb.from('deals').update(rec).eq('id',id).select().single();
+    if(r.error){t.disabled=false;return toast('Not saved',errMsg(r.error))}
+    dlEdit=null;await loadDeals();toast('Deal saved','It shows on the homepage within a minute.',true);aDeals(B);return}
+  if(t.dataset.dltog){const d=DL.find(x=>x.id===t.dataset.dltog);const r=await sb.from('deals').update({active:!d.active}).eq('id',d.id);if(r.error)return toast('Not saved',errMsg(r.error));await loadDeals();aDeals(B);return}
+  if(t.dataset.dldel){const id=t.dataset.dldel;if(dlDel!==id){dlDel=id;aDeals(B);setTimeout(()=>{if(dlDel===id){dlDel=null;if(tab==='deals')aDeals($('#admbody'))}},4000);return}
+    dlDel=null;const r=await sb.from('deals').delete().eq('id',id);if(r.error)return toast('Not deleted',errMsg(r.error));await loadDeals();toast('Deal deleted','',true);aDeals(B);return}
+  if(t.dataset.dlmove){const i=DL.findIndex(x=>x.id===t.dataset.id),j=i+Number(t.dataset.dlmove);if(j<0||j>=DL.length)return;const a=DL[i],b=DL[j];
+    const ups=DL.map((d,k)=>({id:d.id,sort:k===i?j:k===j?i:k}));await Promise.all(ups.map(u=>sb.from('deals').update({sort:u.sort}).eq('id',u.id)));await loadDeals();aDeals(B);return}
+  if(t.dataset.bgsave){const on=$('#bg-on').checked,st=$('#bg-start').value,en=$('#bg-end').value,pct=Math.max(5,Math.min(100,parseInt($('#bg-pct').value)||50));
+    if(on&&(!st||!en))return toast('Add a start and end date to turn it on','',false);
+    const {data,error}=await sb.from('promo_settings').update({bogo_enabled:on,bogo_starts:st?new Date(st).toISOString():null,bogo_ends:en?new Date(en).toISOString():null,bogo_pct:pct}).eq('id',1).select().single();
+    if(error)return toast('Not saved',errMsg(error));A.promo=data;toast(on?'BOGO special is on':'BOGO special saved and off','',true);aDeals(B);return}
+  if(t.dataset.pasend){const title=$('#pa-title').value.trim(),body=$('#pa-body').value.trim(),url=$('#pa-link').value,aud=(document.querySelector('[name="pa-aud"]:checked')||{}).value||'all';
+    if(!title||!body)return toast('Add a title and a message','',false);
+    if(!pushPend){pushPend=true;t.textContent='Tap again to send now';setTimeout(()=>{pushPend=false;if(t.isConnected)t.textContent='Send alert'},5000);return}
+    pushPend=false;t.disabled=true;t.textContent='Sending…';
+    try{const {data:{session}}=await sb.auth.getSession();const r=await fetch(CFG.SUPABASE_URL+'/functions/v1/customer-push',{method:'POST',headers:{'Content-Type':'application/json',apikey:CFG.SUPABASE_KEY,Authorization:'Bearer '+(session?.access_token||'')},body:JSON.stringify({title,body,url,audience:aud})});
+      const j=await r.json();if(!r.ok)throw new Error(j.error||'Send failed');$('#pa-res').textContent=`Sent to ${j.sent} phone${j.sent===1?'':'s'}${j.removed?` · ${j.removed} old subscription${j.removed===1?'':'s'} cleaned up`:''}.`;toast('Alert sent',`${j.sent} phone${j.sent===1?'':'s'}`,true);$('#pa-title').value='';$('#pa-body').value=''}
+    catch(err){toast('Alert not sent',errMsg(err))}t.disabled=false;t.textContent='Send alert';return}
+});
+
 /* ---------- analytics: visits + site speed ---------- */
 let aDays=30;const AN={};
 const PAGE_LBL={home:'Home',shop:'Shop all',drop:'Drop page',specials:'Happy Hour',members:'Membership',events:'Events',areas:'Service area',checkout:'Checkout',done:'Order placed',liked:'Most liked',indica:'Indica',sativa:'Sativa',hybrid:'Hybrid',app:'Get the app'};

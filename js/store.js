@@ -26,6 +26,7 @@ async function loadAll(){
   const err=[p,z,s,t,e].find(x=>x.error);if(err)throw err.error;
   D.products=p.data;D.zones=z.data;D.settings=s.data;D.tiers=t.data;D.events=e.data;
   D.zips={};(zz.data||[]).forEach(r=>D.zips[r.zip]=r.city);
+  D.deals=[];try{const dl=await sb.from('deals').select('*').order('sort').order('created_at');D.deals=dl.data||[]}catch(e){}
   D.hhMin={};try{const hm=await sb.from('hh_city_min').select('city,min_order');(hm.data||[]).forEach(r=>D.hhMin[r.city]=Number(r.min_order))}catch(e){}
   try{const [ps,nf]=await Promise.all([sb.from('promo_settings').select('*').eq('id',1).single(),sb.rpc('next_free_order')]);D.promo=ps.data||{ref_new:10,ref_reward:10,win_cap:100};D.nextFree=nf.data||null}catch(e){D.promo={ref_new:10,ref_reward:10,win_cap:100};D.nextFree=null}
 }
@@ -70,7 +71,10 @@ const SICONS={
  indica:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"><path d="M33 8a17 17 0 1 0 8 25A14 14 0 0 1 33 8z"/><path d="M36 15l1.5 3 3 1.5-3 1.5-1.5 3-1.5-3-3-1.5 3-1.5z"/></svg>',
  sativa:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="24" cy="24" r="8"/><path d="M24 5v6M24 37v6M5 24h6M37 24h6M10.6 10.6l4.2 4.2M33.2 33.2l4.2 4.2M10.6 37.4l4.2-4.2M33.2 14.8l4.2-4.2"/></svg>',
  hybrid:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><circle cx="24" cy="24" r="17"/><path d="M24 7a8.5 8.5 0 0 1 0 17 8.5 8.5 0 0 0 0 17" /><path d="M24 7a17 17 0 0 0 0 34 8.5 8.5 0 0 1 0-17 8.5 8.5 0 0 0 0-17z" fill="currentColor"/></svg>'};
+const PREROLL={id:'prerolls',name:'Pre-Rolls',blurb:'Ready to smoke · packs'};
+const isPreroll=p=>p.cat!=='smoke'&&((p.tags||[]).some(t=>/pre-?roll/i.test(t))||/pre-?roll/i.test(p.name));
 const strainOf=p=>(p.strain||'').trim().toLowerCase();
+const PICON='<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"><path d="M8 36l22-22 6 6-22 22z"/><path d="M8 36l-2 6 6-2"/><path d="M30 14l6 6"/><path d="M38 6c2 3-2 4 0 7M43 9c2 3-2 4 0 7"/></svg>';
 const strainName=id=>(STRAINS.find(x=>x.id===id)||{}).name||id;
 function go(){
   const h=(location.hash||'#home').slice(1);
@@ -79,6 +83,7 @@ function go(){
   if(h.startsWith('track/')){const [,c,t]=h.split('/');trackKey={code:decodeURIComponent(c||''),token:t||''};route='track';render();window.scrollTo(0,0);return}
   route=['home','shop','drop','specials','members','events','areas','checkout','done','app'].includes(h)?h:'home';
   if(CATS.some(c=>c.id===h)){route='shop';shopFilter={type:'cat',val:h};q='';const hi=$('#hq');if(hi)hi.value=''}
+  if(h==='prerolls'){route='shop';shopFilter={type:'pre',val:'prerolls'};q='';const hi=$('#hq');if(hi)hi.value=''}
   if(h==='liked'||STRAINS.some(x=>x.id===h)){route='shop';shopFilter=h==='liked'?{type:'feat',val:null}:{type:'strain',val:h};q='';const hi=$('#hq');if(hi)hi.value=''}
   render();window.scrollTo(0,0);
 }
@@ -98,15 +103,20 @@ function render(){
 /* ---------- home ---------- */
 /* ---------- specials ---------- */
 function detroitNow(){const f=new Intl.DateTimeFormat('en-US',{timeZone:'America/Detroit',weekday:'short',hour:'numeric',minute:'numeric',hour12:false}).formatToParts(new Date());const g=t=>f.find(x=>x.type===t)?.value;return{day:g('weekday'),h:+g('hour')%24,m:+g('minute')}}
-const bogoOn=()=>{const P=D.promo||{};if(!P.bogo_starts)return false;const n=Date.now();return n>=new Date(P.bogo_starts).getTime()&&n<new Date(P.bogo_ends).getTime()};
+const bogoOn=()=>{const P=D.promo||{};if(!P.bogo_enabled||!P.bogo_starts)return false;const n=Date.now();return n>=new Date(P.bogo_starts).getTime()&&n<new Date(P.bogo_ends).getTime()};
 const bogoEndTxt=()=>new Date(new Date(D.promo.bogo_ends).getTime()-1).toLocaleDateString('en-US',{timeZone:'America/Detroit',weekday:'short',month:'short',day:'numeric'});
+function dealsStrip(){
+  const L=(D.deals||[]).map(d=>`<a class="deal deal-${esc(d.style||'yellow')}" href="${esc(/^#|^\/|^https:\/\//.test(d.link||'')?d.link:'#shop')}">${d.badge?`<i>${esc(d.badge)}</i>`:''}<b>${esc(d.title)}</b>${d.subtitle?`<span>${esc(d.subtitle)}</span>`:''}<u>${esc(d.cta||'Shop →')}</u></a>`);
+  const b=bogoStrip();if(!L.length&&!b)return'';
+  return`<section class="deals" aria-label="Deals"><div class="deals-h"><span class="eyebrow">Deals</span></div><div class="deals-row">${b}${L.join('')}</div></section>`;
+}
 function bogoStrip(){if(!bogoOn())return'';return`<a class="bogo" href="#shop"><b>Buy one, get one 50% off</b><span>Launch week celebration · ends ${esc(bogoEndTxt())} · drops &amp; daily deals excluded</span><u>Shop →</u></a>`}
 function happyHourStatus(){const {day,h,m}=detroitNow();const days=['Mon','Tue','Wed','Thu'];const mins=h*60+m;
   if(days.includes(day)&&mins>=660&&mins<900){const left=900-mins;return{on:true,text:`Happy Hour is on now · ${Math.floor(left/60)?Math.floor(left/60)+'h ':''}${left%60}m left to order`}}
   if(days.includes(day)&&mins<660)return{on:false,text:'Happy Hour starts today at 11am'};
   const next=day==='Thu'||day==='Fri'||day==='Sat'||day==='Sun'?'Monday':'tomorrow';return{on:false,text:`Next Happy Hour: ${next} at 11am`}}
 const dealProd=n=>D.products.find(p=>p.name.toLowerCase()===n.toLowerCase());
-function freeGiftFor(sub){if(sub>=100)return{label:'$100+ order',choices:['Free shake','5 free pre-rolls']};if(sub>=65)return{label:'$65+ order',choices:['3 free pre-rolls']};return{label:'Every order',choices:['2 free pre-rolls']}}
+function freeGiftFor(sub){if(sub>=100)return{label:'$100+ order',choices:['Free shake','5 free pre-rolls']};if(sub>=65)return{label:'$65+ order',choices:['3 free pre-rolls']};if(sub>=50)return{label:'$50+ order',choices:['2 free pre-rolls']};return null}
 function vSpecials(V){
   const hh=happyHourStatus(),sfv=dealProd('SFV OG'),bolo=dealProd('Bolo Runtz');
   V.innerHTML=`<div class="sp">
@@ -133,7 +143,7 @@ function vSpecials(V){
    <ol class="sp-ladder">
     <li><div class="sp-tier">$100+</div><div><b>THC order</b><span>Choose a free shake or 5 pre-rolls</span></div></li>
     <li><div class="sp-tier">$65+</div><div><b>Any order</b><span>Choose 3 free pre-rolls</span></div></li>
-    <li><div class="sp-tier">Under $65</div><div><b>Every order</b><span>2 free pre-rolls with your order</span></div></li>
+    <li><div class="sp-tier">$50+</div><div><b>Any order</b><span>2 free pre-rolls with your order</span></div></li>
    </ol>
    <p class="note">Pick your free item at checkout.</p>
    <div style="margin-top:28px">${freeCounter()}</div>
@@ -146,10 +156,11 @@ function freeCounter(){const n=D.nextFree;if(!n||!(Number(n.cap)>0))return'';ret
 function vHome(V){
   V.innerHTML=`<div class="wrap">
   <section class="hero"><img src="img/logo.webp" alt="Cargo+420 Exclusive Delivery Service"><p>Metro Detroit cannabis delivery. Pick a category, build your order, pay at the door with cash, Cash App or card.</p>
-   ${activeOrderStrip()}${bogoStrip()}${dropFeature()}${freeCounter()}
+   ${activeOrderStrip()}${dealsStrip()}${dropFeature()}${freeCounter()}
    <button class="zipchip" id="zipchip">${myZip?`${ICONS.pin}<span>Delivering to <b>${esc(myZip.city)} ${esc(myZip.zip)}</b></span><u>Change</u>`:`${ICONS.pin}<span>Do we deliver to you?</span><u>Check your ZIP</u>`}</button></section>
   <nav class="catgrid" aria-label="Shop by category">
    ${HOME_CATS.filter(id=>shopItems().some(p=>p.cat===id)).map(id=>{const c=CATS.find(x=>x.id===id);return`<a class="catbtn" href="#${id}">${ICONS[id]}<span>${c.name}</span><small>${c.blurb}</small></a>`}).join('')}
+   ${shopItems().some(isPreroll)?`<a class="catbtn" href="#prerolls">${PICON}<span>Pre-Rolls</span><small>${PREROLL.blurb}</small></a>`:''}
    ${STRAINS.filter(x=>shopItems().some(p=>strainOf(p)===x.id)).map(x=>`<a class="catbtn" href="#${x.id}">${SICONS[x.id]}<span>${x.name}</span><small>${x.sub}</small></a>`).join('')}
    <a class="catbtn all" href="#shop">${ICONS.all}<span>Shop all</span><small>${shopItems().length} products</small></a>
   </nav>
@@ -243,7 +254,7 @@ function vApp(V){
     </div>
     <div class="ap-intro"><span class="eyebrow">Free · no app store needed</span><h1>Get the Cargo+420 app</h1>
      <p class="lede">Put us on your home screen in 20 seconds. One tap opens the menu full-screen, and your name, address and cart are saved, so reordering is fast.</p>
-     ${done?`<div class="ap-done">${AI.check}<span><b>You're all set.</b> You're using the app right now.</span></div>`
+     ${done?`<div class="ap-done">${AI.check}<span><b>You're all set.</b> You're using the app right now.</span></div>${pushCard(null,'app')}`
       :inAppBrowser?`<div class="warnbox ap-warn"><b>Open this page in ${isIOS?'Safari':'Chrome'} first.</b> You're inside ${/Instagram/i.test(UA)?'Instagram':'another app'}'s browser, which can't add apps. Tap the ${isIOS?'<b>•••</b> or share':'<b>⋮</b>'} menu and choose <b>Open in ${isIOS?'Safari':'browser'}</b>, or copy the link below and paste it into ${isIOS?'Safari':'Chrome'}.<div class="row" style="margin-top:8px"><span class="mono">${esc(url.replace(/^https:\/\//,''))}</span><button class="btn sm" type="button" data-copyapp="${esc(url)}">Copy link</button></div></div>`
       :installEvt?`<button class="btn ap-install" type="button" id="apinstall">Install the app</button><p class="note">Tap Install, then confirm. That's it.</p>`
       :iosNotSafari?`<div class="warnbox ap-warn"><b>Open this page in Safari.</b> On iPhone, only Safari can add apps to your home screen. Copy the link and paste it into Safari.<div class="row" style="margin-top:8px"><span class="mono">${esc(url.replace(/^https:\/\//,''))}</span><button class="btn sm" type="button" data-copyapp="${esc(url)}">Copy link</button></div></div>`:''}
@@ -390,7 +401,7 @@ function openZipModal(){
 }
 
 /* ---------- shop ---------- */
-function filterLabel(){return shopFilter.type==='cat'?catName(shopFilter.val):shopFilter.type==='feat'?'Most liked':shopFilter.type==='strain'?strainName(shopFilter.val):shopFilter.val||''}
+function filterLabel(){return shopFilter.type==='pre'?'Pre-Rolls':shopFilter.type==='cat'?catName(shopFilter.val):shopFilter.type==='feat'?'Most liked':shopFilter.type==='strain'?strainName(shopFilter.val):shopFilter.val||''}
 function openFilters(){
   const on=(t,v)=>shopFilter.type===t&&(v==null||shopFilter.val===v)?'on':'';
   $('#layer').innerHTML=`<div class="scrim" data-close></div><aside class="drawer fsheet" role="dialog" aria-label="Filter and sort"><header><h2 style="font-size:30px">Filter &amp; Sort</h2><button class="x" data-close aria-label="Close">×</button></header>
@@ -398,7 +409,7 @@ function openFilters(){
     <label>Search<input id="shopq2" type="search" placeholder="Search menu" value="${esc(q)}"></label>
     <label>Sort by<select id="sort2"><option value="newest">Newest</option><option value="low">Price, low to high</option><option value="high">Price, high to low</option><option value="name">Name A–Z</option></select></label>
     <div class="eyebrow" style="margin-top:6px">Category</div>
-    <div class="fchips"><button class="${on('all')}" data-f="all">All</button><button class="${on('feat')}" data-f="feat">Most liked</button>${CATS.map(c=>`<button class="${on('cat',c.id)}" data-f="cat" data-v="${c.id}">${c.name}</button>`).join('')}</div>
+    <div class="fchips"><button class="${on('all')}" data-f="all">All</button><button class="${on('feat')}" data-f="feat">Most liked</button>${CATS.map(c=>`<button class="${on('cat',c.id)}" data-f="cat" data-v="${c.id}">${c.name}</button>`).join('')}<button class="${on('pre')}" data-f="pre" data-v="prerolls">Pre-Rolls</button></div>
     <div class="eyebrow" style="margin-top:6px">Strain</div>
     <div class="fchips">${STRAINS.map(x=>`<button class="${on('strain',x.id)}" data-f="strain" data-v="${x.id}">${x.name}</button>`).join('')}</div>
     <div class="eyebrow" style="margin-top:6px">Filter</div>
@@ -413,6 +424,7 @@ function vShop(V){
   if(shopFilter.type==='tag')list=list.filter(p=>p.tags.includes(shopFilter.val));
   if(shopFilter.type==='feat')list=list.filter(p=>p.featured);
   if(shopFilter.type==='strain')list=list.filter(p=>strainOf(p)===shopFilter.val);
+  if(shopFilter.type==='pre')list=list.filter(isPreroll);
   if(q)list=list.filter(p=>(p.name+' '+p.tags.join(' ')).toLowerCase().includes(q.toLowerCase()));
   if(sortBy==='low')list.sort((a,b)=>a.price-b.price);
   if(sortBy==='high')list.sort((a,b)=>b.price-a.price);
@@ -424,6 +436,7 @@ function vShop(V){
     <li><button class="${on('all')}" data-f="all">All Products</button></li>
     <li><button class="${on('feat')}" data-f="feat">Most liked</button></li>
     ${CATS.map(c=>`<li><button class="${on('cat',c.id)}" data-f="cat" data-v="${c.id}">${c.name}</button></li>`).join('')}
+    ${shopItems().some(isPreroll)?`<li><button class="${on('pre')}" data-f="pre" data-v="prerolls">Pre-Rolls</button></li>`:''}
     <li class="grp">Strain</li>
     ${STRAINS.map(x=>`<li><button class="${on('strain',x.id)}" data-f="strain" data-v="${x.id}">${x.name}</button></li>`).join('')}
     <li class="grp">Filter</li>
@@ -440,6 +453,12 @@ function vShop(V){
   $('#sort').value=sortBy;
 }
 let selOpt=null,curP=null;
+function strainBar(p){
+  const m=(p.description||'').match(/(\d{1,3})%\s*(Indica|Sativa)\s*\/\s*(\d{1,3})%\s*(Indica|Sativa)/i);if(!m)return'';
+  let ind=/indica/i.test(m[2])?+m[1]:+m[3];ind=Math.max(0,Math.min(100,ind));const sat=100-ind;
+  const thc=(p.description.match(/(?:up to |about )?\d{1,2}(?:–\d{1,2})?% THC/i)||[''])[0];
+  return`<div class="sbar"><div class="sbar-l"><span>Indica <b>${ind}%</b></span><span><b>${sat}%</b> Sativa</span></div><div class="sbar-t"><i style="width:${ind}%"></i></div>${thc?`<small>${esc(thc)}</small>`:''}</div>`;
+}
 function openProduct(id){
   const p=prod(id);if(!p)return;curP=id;
   const ch=choices(p);selOpt=ch?(ch.find(c=>c.stock>0)||{}).label||null:null;
@@ -454,6 +473,7 @@ function drawProduct(p){
   $('#pinfo').innerHTML=`<div class="row" style="justify-content:space-between"><span class="eyebrow">${catName(p.cat)}</span><button class="x" data-close aria-label="Close">×</button></div>
     <h2>${esc(p.name)}</h2>
     <div class="chips">${[p.strain,p.thc,p.size,...(p.tags||[])].filter(Boolean).slice(0,4).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>
+    ${strainBar(p)}
     ${ch?`<div class="optgrp"><div class="eyebrow">${esc(p.options.name||'Options')}</div><div class="opts">${ch.map(c=>`<button type="button" class="opt${c.label===selOpt?' on':''}" data-opt="${esc(c.label)}" ${c.stock>0?'':'disabled'}><span>${esc(c.label)}</span><small>${c.stock>0?money(c.price):'Sold out'}</small></button>`).join('')}</div></div>`:''}
     <div class="num" style="font-size:26px;font-weight:600">${money(price)}</div>
     ${D.tiers.length?`<div class="note">Members pay ${money(price*(1-minOff/100))}–${money(price*(1-maxOff/100))}</div>`:''}
@@ -503,6 +523,7 @@ function vCheckout(V){
 }
 function drawGift(sub){
   const el=$('#co-gift');if(!el)return;const g=freeGiftFor(sub),cur=$('#co-giftsel')?.value||co.gift||'';
+  if(!g){el.innerHTML=`<div class="gift gift-off">Spend ${money(50-sub)} more and get <b>2 free pre-rolls</b>.</div>`;return}
   el.innerHTML=`<label class="gift">Free with your order <small>(${esc(g.label)})</small><select id="co-giftsel">${g.choices.map(c=>`<option ${c===cur?'selected':''}>${esc(c)}</option>`).join('')}</select></label>`;
 }
 function drawSummary(){
@@ -542,12 +563,41 @@ async function placeOrder(){
   store.set('c420last',{...data,name:co.name,phone:co.phone,pay:co.pay||'cash'});try{localStorage.removeItem('c420ref')}catch(e){};co.ref='';store.set('c420co',{...co,age:undefined});cart=[];saveCart();
   loadAll().catch(()=>{});location.hash='#done';
 }
+/* ---------- customer push alerts ---------- */
+const PUSH={
+  supported:()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window,
+  iosNeedsApp:()=>isIOS&&!isStandalone(),
+  async sub(){const reg=await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;return{reg,sub:await reg.pushManager.getSubscription()}},
+  key(){const b=(CFG.VAPID_PUBLIC+'='.repeat((4-CFG.VAPID_PUBLIC.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/');return Uint8Array.from(atob(b),c=>c.charCodeAt(0))},
+  async save(sub,link){const j=sub.toJSON();return sb.rpc('customer_push_save',{p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth,p_code:link?.code||null,p_token:link?.token||null,p_device:isIOS?'iphone':isAndroid?'android':'desktop'})},
+  async on(link){
+    if(!PUSH.supported())throw new Error('This browser can\'t get alerts. Try Chrome on Android, or the home-screen app on iPhone.');
+    const perm=await Notification.requestPermission();if(perm!=='granted')throw new Error('Alerts are blocked. Turn on notifications for this app in your phone settings.');
+    let {reg,sub}=await PUSH.sub();if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:PUSH.key()});
+    const r=await PUSH.save(sub,link);if(r.error)throw r.error;try{localStorage.setItem('c420push','1')}catch(e){}return r.data;
+  },
+  isOn:()=>{try{return localStorage.getItem('c420push')==='1'&&Notification.permission==='granted'}catch(e){return false}},
+  async relink(link){try{if(!PUSH.isOn())return;const {sub}=await PUSH.sub();if(sub)await PUSH.save(sub,link)}catch(e){}}
+};
+function pushCard(link,ctx){
+  if(PUSH.isOn())return`<div class="pushcard on"><b>🔔 Alerts are on</b><span>${ctx==='track'?'We\'ll alert this phone when your driver heads out and when it\'s delivered.':'You\'ll get order updates, drops and deals on this phone.'}</span></div>`;
+  if(!PUSH.supported()&&!isIOS)return'';
+  if(PUSH.iosNeedsApp())return`<div class="pushcard"><b>Get alerts on your iPhone</b><span>${ctx==='app'?'After you add the app, open it from your home screen and tap <b>Turn on alerts</b>.':'Add our app to your home screen, then turn on alerts to get a heads-up when your driver is on the way.'}</span>${ctx==='app'?'':'<a class="btn sm" href="#app">How to add the app</a>'}</div>`;
+  return`<div class="pushcard"><b>${ctx==='track'?'Get a heads-up when your driver is on the way':'Turn on alerts'}</b><span>${ctx==='track'?'We\'ll alert this phone with your ETA and when it\'s delivered.':'Order updates with live ETAs, new drops and deals. Turn off anytime in your phone settings.'}</span><button class="btn sm" type="button" data-pushon="${link?esc(link.code+'|'+link.token):''}">Turn on alerts</button></div>`;
+}
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('[data-pushon]');if(!t)return;
+  const [code,token]=(t.dataset.pushon||'').split('|');t.disabled=true;t.textContent='Turning on…';
+  try{await PUSH.on(code&&token?{code,token}:null);toast('Alerts are on','You\'ll get updates on this phone.',true);const c=t.closest('.pushcard');if(c)c.outerHTML=pushCard(null,code?'track':'app')}
+  catch(err){t.disabled=false;t.textContent='Turn on alerts';toast('Alerts not turned on',errMsg(err))}
+});
+
 /* ---------- live order tracking ---------- */
-let trackKey=null,trkPoll=null,trkTick=null,trkData=null;
+let trackKey=null,trkPoll=null,trkTick=null,trkData=null,trkLink=null;
 function stopTrack(){clearInterval(trkPoll);clearInterval(trkTick);trkPoll=trkTick=null}
 async function fetchTrack(code,token){const {data,error}=await sb.rpc('track_order',{p_code:code,p_token:token});if(error)throw error;return data}
 function startTrack(code,token){
-  stopTrack();const load=async()=>{try{const d=await fetchTrack(code,token);trkData=d?{...d,skew:Date.now()-new Date(d.now).getTime()}:null;drawTrack();if(d&&['delivered','cancelled'].includes(d.status))clearInterval(trkPoll)}catch(e){}};
+  stopTrack();trkLink={code,token};PUSH.relink(trkLink);const load=async()=>{try{const d=await fetchTrack(code,token);trkData=d?{...d,skew:Date.now()-new Date(d.now).getTime()}:null;drawTrack();if(d&&['delivered','cancelled'].includes(d.status))clearInterval(trkPoll)}catch(e){}};
   load();trkPoll=setInterval(()=>{if(!document.hidden)load()},20000);trkTick=setInterval(drawTrack,15000);
 }
 const tTime=d=>new Date(d).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Detroit'});
@@ -568,6 +618,7 @@ function drawTrack(){
   el.innerHTML=`<div class="trk-head"><span class="trk-dot"></span><div><b>${head}</b><span>${sub}</span></div></div>
    ${d.status!=='cancelled'?`<ol class="trk-steps">${steps.map((s,k)=>`<li class="${k<i?'done':k===i?'on':''}"><i>${k<i||d.status==='delivered'?'✓':k+1}</i><b>${s[0]}</b><small>${s[1]&&k<=i?tTime(s[1]):''}</small></li>`).join('')}</ol>`:''}
    ${d.status==='out'&&eta?`<div class="trk-road"><span class="trk-car" style="left:${pct}%"><svg viewBox="0 0 32 20"><path d="M3 13l2-6a3 3 0 0 1 3-2h12a3 3 0 0 1 2.6 1.5L25 10h3a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1H3z" fill="#f7c31b" stroke="#000" stroke-width="1.4"/><circle cx="9" cy="15" r="2.6" fill="#000"/><circle cx="23" cy="15" r="2.6" fill="#000"/></svg></span><span class="trk-home">⌂</span></div>`:''}
+   ${!['delivered','cancelled'].includes(d.status)?`<div id="trkpush">${pushCard(trkLink,'track')}</div>`:''}
    <div class="trk-foot"><span class="mono">${esc(d.code)}</span><span>${d.items.map(x=>x.qty+'× '+esc(x.name)).join(' · ')}</span><b class="num">${money(d.total)}</b></div>`;
 }
 function vTrack(V){
@@ -761,9 +812,9 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#layer').innerHTM
 /* ---------- header search + category bar ---------- */
 function drawCatbar(){
   const el=$('#catbar .wrap');if(!el)return;
-  const cur=route!=='shop'?'':shopFilter.type==='cat'||shopFilter.type==='strain'?shopFilter.val:shopFilter.type==='feat'?'liked':shopFilter.type==='all'&&!q?'all':'';
+  const cur=route!=='shop'?'':shopFilter.type==='cat'||shopFilter.type==='strain'||shopFilter.type==='pre'?shopFilter.val:shopFilter.type==='feat'?'liked':shopFilter.type==='all'&&!q?'all':'';
   const have=new Set(shopItems().map(p=>p.cat));
-  el.innerHTML=`<a href="#shop" data-catall="1" class="${cur==='all'?'on':''}">Shop all</a>`+`<a href="#liked" class="${cur==='liked'?'on':''}">Most liked</a>`+CATS.filter(c=>have.has(c.id)).map(c=>`<a href="#${c.id}" class="${cur===c.id?'on':''}">${c.name}</a>`).join('')+`<span class="cb-div"></span>`+STRAINS.map(x=>`<a href="#${x.id}" class="cb-st ${cur===x.id?'on':''}">${x.name}</a>`).join('')+`<a href="#specials" class="cb-sp">Happy Hour</a>`;
+  el.innerHTML=`<a href="#shop" data-catall="1" class="${cur==='all'?'on':''}">Shop all</a>`+`<a href="#liked" class="${cur==='liked'?'on':''}">Most liked</a>`+CATS.filter(c=>have.has(c.id)).map(c=>`<a href="#${c.id}" class="${cur===c.id?'on':''}">${c.name}</a>`+(c.id==='flower'&&shopItems().some(isPreroll)?`<a href="#prerolls" class="${cur==='prerolls'?'on':''}">Pre-Rolls</a>`:'')).join('')+`<span class="cb-div"></span>`+STRAINS.map(x=>`<a href="#${x.id}" class="cb-st ${cur===x.id?'on':''}">${x.name}</a>`).join('')+`<a href="#specials" class="cb-sp">Happy Hour</a>`;
 }
 function hsMatches(v){v=v.trim().toLowerCase();if(!v)return[];return shopItems().filter(p=>(p.name+' '+(p.tags||[]).join(' ')+' '+catName(p.cat)+' '+((choices(p)||[]).map(c=>c.label).join(' '))).toLowerCase().includes(v))}
 function drawSuggest(v){
