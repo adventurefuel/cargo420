@@ -657,7 +657,7 @@ function dropState(p,now=Date.now()){
   if(p.early_tier&&p.early_minutes>0&&now>=dropT(p)-p.early_minutes*60e3)return'early';
   return'soon';
 }
-function curDrop(){const d=drops();return d.find(p=>p.stock>0)||d[d.length-1]||null}
+function curDrop(){const d=drops(),n=Date.now();return d.find(p=>p.stock>0&&n<dropT(p)+864e5)||d.filter(p=>dropT(p)<=n).pop()||d[d.length-1]||null}
 const dropNo=p=>'#'+String(p.drop_no||0).padStart(3,'0');
 const tierName=id=>(D.tiers.find(t=>t.id===id)||{name:'Member'}).name;
 function cd(ms){ms=Math.max(0,ms);const s=Math.floor(ms/1e3),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=s%60,z=n=>String(n).padStart(2,'0');return{d,h:z(h),m:z(m),s:z(x)}}
