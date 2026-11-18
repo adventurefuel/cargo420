@@ -260,6 +260,7 @@ function vApp(V){
       :inAppBrowser?`<div class="warnbox ap-warn"><b>Open this page in ${isIOS?'Safari':'Chrome'} first.</b> You're inside ${/Instagram/i.test(UA)?'Instagram':'another app'}'s browser, which can't add apps. Tap the ${isIOS?'<b>•••</b> or share':'<b>⋮</b>'} menu and choose <b>Open in ${isIOS?'Safari':'browser'}</b>, or copy the link below and paste it into ${isIOS?'Safari':'Chrome'}.<div class="row" style="margin-top:8px"><span class="mono">${esc(url.replace(/^https:\/\//,''))}</span><button class="btn sm" type="button" data-copyapp="${esc(url)}">Copy link</button></div></div>`
       :installEvt?`<button class="btn ap-install" type="button" id="apinstall">Install the app</button><p class="note">Tap Install, then confirm. That's it.</p>`
       :iosNotSafari?`<div class="warnbox ap-warn"><b>Open this page in Safari.</b> On iPhone, only Safari can add apps to your home screen. Copy the link and paste it into Safari.<div class="row" style="margin-top:8px"><span class="mono">${esc(url.replace(/^https:\/\//,''))}</span><button class="btn sm" type="button" data-copyapp="${esc(url)}">Copy link</button></div></div>`:''}
+     ${!done&&!isIOS&&!inAppBrowser&&PUSH.supported()?pushCard(null,'app'):''}
     </div>
    </div>
    <div class="ap-tabs" role="tablist">${[['ios','iPhone'],['android','Android · Chrome'],['samsung','Samsung Internet']].map(([k,l])=>`<button class="${k===kind?'on':''}" data-apk="${k}" role="tab">${l}</button>`).join('')}</div>
