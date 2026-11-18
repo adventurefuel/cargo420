@@ -118,7 +118,7 @@ function happyHourStatus(){const {day,h,m}=detroitNow();const days=['Mon','Tue',
 const dealProd=n=>D.products.find(p=>p.name.toLowerCase()===n.toLowerCase());
 function freeGiftFor(sub){if(sub>=100)return{label:'$100+ order',choices:['Free shake','5 free pre-rolls']};if(sub>=65)return{label:'$65+ order',choices:['3 free pre-rolls']};if(sub>=50)return{label:'$50+ order',choices:['2 free pre-rolls']};return null}
 function vSpecials(V){
-  const hh=happyHourStatus(),sfv=dealProd('SFV OG'),bolo=dealProd('Bolo Runtz');
+  const hh=happyHourStatus(),sfv=dealProd('Candy Drip'),bolo=dealProd('Slurricane');
   V.innerHTML=`<div class="sp">
   <section class="sp-hh${hh.on?' on':''}"><div class="wrap">
    <div class="sp-hhcard">
@@ -137,7 +137,7 @@ function vSpecials(V){
    <div class="sp-head"><span class="eyebrow">Every day</span><h2>Daily deals</h2></div>
    <div class="sp-feature">
     ${[sfv,bolo].filter(Boolean).map(p=>`<button class="sp-prod" data-p="${p.id}"><div class="sp-img">${art(p)}</div><div class="sp-pinfo"><b>${esc(p.name)}</b><span>3.5g <em>$15</em> · 28g <em>$70</em></span><u>Choose size →</u></div></button>`).join('')}
-    <div class="sp-price"><span>SFV OG &amp; Bolo Runtz</span><b>$15</b><small>for 3.5g</small><b>$70</b><small>for 28g</small></div>
+    <div class="sp-price"><span>Candy Drip &amp; Slurricane</span><b>$15</b><small>for 3.5g</small><b>$70</b><small>for 28g</small></div>
    </div>
    <div class="sp-head" style="margin-top:36px"><span class="eyebrow">Free with your order</span><h2>The more you order,<br>the more you get</h2></div>
    <ol class="sp-ladder">
