@@ -1,3 +1,4 @@
+let oPend=null;
 /* Cargo+420 owner dashboard (installable PWA) */
 const A={orders:[],customers:[],drivers:[],members:[],products:[],zones:[],settings:{},tiers:[],events:[],zips:[]};
 const SL={new:'New',confirmed:'Confirmed',out:'Out for delivery',delivered:'Delivered',cancelled:'Cancelled'};
@@ -207,12 +208,13 @@ function aOrders(B){
    <div><div class="meta">${esc(o.address)}, ${esc(o.city)} · <a href="https://maps.google.com/?q=${encodeURIComponent(o.address+', '+o.city+', MI')}" target="_blank" rel="noopener">Map</a></div><div class="paytag pay-${payOf(o)==='Cash'?'cash':payOf(o).startsWith('Cash App')?'cashapp':'card'}">Pays: ${esc(payOf(o))}</div>${noteOf(o)?`<div class="meta" style="color:var(--yellow)">Note: ${esc(noteOf(o))}</div>`:''}
     <div class="oitems">${o.items.map(itemRow).join('')}</div></div>
    <div><div class="tot">${money(o.total)}</div><div class="meta" style="text-align:right">${Number(o.promo_disc)?`BOGO −${money(o.promo_disc)} · `:Number(o.discount)?`member −${money(o.discount)} · `:''}${Number(o.fee)?`fee ${money(o.fee)}`:'no fee'}</div>
-    ${o.status==='delivered'?`<div class="meta" style="text-align:right">Cash ${o.cash_in?'turned in':'with '+esc(drvName(o.driver_id)||'driver')}</div>`:''}</div>
+    ${o.status==='out'&&isCash(o)?`<div class="cashdue">Cash due ${money(o.total)} · not collected yet</div>`:''}
+    ${o.status==='delivered'&&isCash(o)?`<div class="meta" style="text-align:right">Cash ${o.cash_in?'turned in':'with '+esc(drvName(o.driver_id)||'driver')}</div>`:''}</div>
    <div class="acts">${o.status==='cancelled'||o.status==='delivered'?`<span class="meta">${o.driver_id?'Driver: '+esc(drvName(o.driver_id)):''}</span>`:`
     <select data-drv="${o.id}" aria-label="Assign driver"><option value="">Assign driver</option>${A.drivers.filter(d=>d.active||d.id===o.driver_id).map(d=>`<option value="${d.id}" ${o.driver_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
     ${o.status==='new'?`<button class="btn sm" data-st="${o.id}" data-to="confirmed">Confirm order</button>`:''}
     ${o.status==='confirmed'?`<button class="btn sm" data-st="${o.id}" data-to="out" ${o.driver_id?'':'disabled title="Assign a driver first"'}>Send out</button>`:''}
-    ${o.status==='out'?`<span class="eta-row"><span>${o.eta_at?'ETA '+etaTxt(o):'ETA'}:</span>${[10,20,30,45].map(m=>`<button class="btn ghost sm" data-oeta="${m}" data-o="${o.id}">${m}m</button>`).join('')}</span><button class="btn green sm" data-st="${o.id}" data-to="delivered">Delivered · paid</button>`:''}
+    ${o.status==='out'?`<span class="eta-row"><span>${o.eta_at?'ETA '+etaTxt(o):'ETA'}:</span>${[10,20,30,45].map(m=>`<button class="btn ghost sm" data-oeta="${m}" data-o="${o.id}">${m}m</button>`).join('')}</span><button class="btn green sm" data-st="${o.id}" data-to="delivered" data-confirm="1">${oPend===o.id?(isCash(o)?'Cash received? Tap to confirm':'Tap again to confirm'):(isCash(o)?'Delivered · cash received':'Mark delivered')}</button>`:''}
     <button class="btn red sm" data-cancel="${o.id}">Cancel</button>`}</div>
   </article>`}).join('')||'<p class="note">No orders here right now. New orders appear at the top with a chime and a phone alert.</p>'}</div></div>`;
 }
@@ -586,7 +588,8 @@ document.addEventListener('click',async e=>{
   if(t.id==='testpush'){testPush();return}
   if(t.id==='openbtn'){const d=await sb.from('store_settings').update({open:!A.settings.open}).eq('id',1).select().single();if(d.error)return toast('Not saved',errMsg(d.error));A.settings=d.data;toast(A.settings.open?'Store is taking orders':'Store closed','',true);render();return}
   if(t.dataset.oeta){t.disabled=true;const {data,error}=await sb.rpc('set_order_eta',{p_order:t.dataset.o,p_minutes:+t.dataset.oeta});if(error)toast('ETA not saved',errMsg(error));else{const o=A.orders.find(x=>x.id===t.dataset.o);if(o)o.eta_at=data.eta_at;toast(`ETA set · ${t.dataset.oeta} min`,'The customer sees it on their tracking page.',true)}render();return}
-  if(t.dataset.st){t.disabled=true;const o=await upd('orders',t.dataset.st,{status:t.dataset.to});if(o){toast(`${o.code} → ${SL[o.status]}`,'',true);if(o.status==='delivered'){const c=A.customers.find(c=>c.id===o.customer_id);if(c)c.id_verified=true}}render();return}
+  if(t.dataset.st){if(t.dataset.confirm&&oPend!==t.dataset.st){const id=t.dataset.st;oPend=id;render();setTimeout(()=>{if(oPend===id){oPend=null;render()}},4000);return}
+    oPend=null;t.disabled=true;const o=await upd('orders',t.dataset.st,{status:t.dataset.to});if(o){toast(`${o.code} → ${SL[o.status]}`,'',true);if(o.status==='delivered'){const c=A.customers.find(c=>c.id===o.customer_id);if(c)c.id_verified=true}}render();return}
   if(t.dataset.cancel){if(pendingCancel!==t.dataset.cancel){pendingCancel=t.dataset.cancel;t.textContent='Tap again to cancel';setTimeout(()=>{if(pendingCancel===t.dataset.cancel){pendingCancel=null;t.textContent='Cancel'}},4000);return}
     pendingCancel=null;const o=await upd('orders',t.dataset.cancel,{status:'cancelled'});if(o)toast(`${o.code} cancelled`,'Items were put back in stock.',true);render();return}
   if(t.dataset.cashin){const ids=A.orders.filter(o=>o.driver_id===t.dataset.cashin&&o.status==='delivered'&&!o.cash_in&&isCash(o)).map(o=>o.id);

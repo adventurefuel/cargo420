@@ -26,7 +26,7 @@ async function loadAll(){
   const err=[p,z,s,t,e].find(x=>x.error);if(err)throw err.error;
   D.products=p.data;D.zones=z.data;D.settings=s.data;D.tiers=t.data;D.events=e.data;
   D.zips={};(zz.data||[]).forEach(r=>D.zips[r.zip]=r.city);
-  D.deals=[];try{const dl=await sb.from('deals').select('*').order('sort').order('created_at');D.deals=dl.data||[]}catch(e){}
+  D.deals=[];try{const dl=await sb.from('deals').select('*').order('sort').order('created_at');const now=Date.now();D.deals=(dl.data||[]).filter(d=>d.active&&(!d.starts_at||new Date(d.starts_at).getTime()<=now)&&(!d.ends_at||new Date(d.ends_at).getTime()>now))}catch(e){}
   D.hhMin={};try{const hm=await sb.from('hh_city_min').select('city,min_order');(hm.data||[]).forEach(r=>D.hhMin[r.city]=Number(r.min_order))}catch(e){}
   try{const [ps,nf]=await Promise.all([sb.from('promo_settings').select('*').eq('id',1).single(),sb.rpc('next_free_order')]);D.promo=ps.data||{ref_new:10,ref_reward:10,win_cap:100};D.nextFree=nf.data||null}catch(e){D.promo={ref_new:10,ref_reward:10,win_cap:100};D.nextFree=null}
 }
@@ -156,8 +156,10 @@ function freeCounter(){const n=D.nextFree;if(!n||!(Number(n.cap)>0))return'';ret
 function vHome(V){
   V.innerHTML=`<div class="wrap">
   <section class="hero"><img src="img/logo.webp" alt="Cargo+420 Exclusive Delivery Service"><p>Metro Detroit cannabis delivery. Pick a category, build your order, pay at the door with cash, Cash App or card.</p>
-   ${activeOrderStrip()}${dealsStrip()}${dropFeature()}${freeCounter()}
-   <button class="zipchip" id="zipchip">${myZip?`${ICONS.pin}<span>Delivering to <b>${esc(myZip.city)} ${esc(myZip.zip)}</b></span><u>Change</u>`:`${ICONS.pin}<span>Do we deliver to you?</span><u>Check your ZIP</u>`}</button></section>
+   ${activeOrderStrip()}
+   <button class="zipchip" id="zipchip">${myZip?`${ICONS.pin}<span>Delivering to <b>${esc(myZip.city)} ${esc(myZip.zip)}</b></span><u>Change</u>`:`${ICONS.pin}<span>Do we deliver to you?</span><u>Check your ZIP</u>`}</button>
+   ${dealsStrip()}${dropFeature()}${freeCounter()}
+</section>
   <nav class="catgrid" aria-label="Shop by category">
    ${HOME_CATS.filter(id=>shopItems().some(p=>p.cat===id)).map(id=>{const c=CATS.find(x=>x.id===id);return`<a class="catbtn" href="#${id}">${ICONS[id]}<span>${c.name}</span><small>${c.blurb}</small></a>`}).join('')}
    ${shopItems().some(isPreroll)?`<a class="catbtn" href="#prerolls">${PICON}<span>Pre-Rolls</span><small>${PREROLL.blurb}</small></a>`:''}
