@@ -71,6 +71,8 @@ const SICONS={
  indica:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"><path d="M33 8a17 17 0 1 0 8 25A14 14 0 0 1 33 8z"/><path d="M36 15l1.5 3 3 1.5-3 1.5-1.5 3-1.5-3-3-1.5 3-1.5z"/></svg>',
  sativa:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="24" cy="24" r="8"/><path d="M24 5v6M24 37v6M5 24h6M37 24h6M10.6 10.6l4.2 4.2M33.2 33.2l4.2 4.2M10.6 37.4l4.2-4.2M33.2 14.8l4.2-4.2"/></svg>',
  hybrid:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><circle cx="24" cy="24" r="17"/><path d="M24 7a8.5 8.5 0 0 1 0 17 8.5 8.5 0 0 0 0 17" /><path d="M24 7a17 17 0 0 0 0 34 8.5 8.5 0 0 1 0-17 8.5 8.5 0 0 0 0-17z" fill="currentColor"/></svg>'};
+const isNew=p=>(p.tags||[]).some(t=>/^new$/i.test(t));
+const NICON='<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"><path d="M24 5l5 11 12 1.5-9 8 2.5 12L24 31.5 13.5 37.5 16 25.5l-9-8L19 16z"/></svg>';
 const PREROLL={id:'prerolls',name:'Pre-Rolls',blurb:'Ready to smoke · packs'};
 const isPreroll=p=>p.cat!=='smoke'&&((p.tags||[]).some(t=>/pre-?roll/i.test(t))||/pre-?roll/i.test(p.name));
 const strainOf=p=>(p.strain||'').trim().toLowerCase();
@@ -83,6 +85,7 @@ function go(){
   if(h.startsWith('track/')){const [,c,t]=h.split('/');trackKey={code:decodeURIComponent(c||''),token:t||''};route='track';render();window.scrollTo(0,0);return}
   route=['home','shop','drop','specials','members','events','areas','checkout','done','app'].includes(h)?h:'home';
   if(CATS.some(c=>c.id===h)){route='shop';shopFilter={type:'cat',val:h};q='';const hi=$('#hq');if(hi)hi.value=''}
+  if(h==='new'){route='shop';shopFilter={type:'new',val:'new'};q='';const hi=$('#hq');if(hi)hi.value=''}
   if(h==='prerolls'){route='shop';shopFilter={type:'pre',val:'prerolls'};q='';const hi=$('#hq');if(hi)hi.value=''}
   if(h==='liked'||STRAINS.some(x=>x.id===h)){route='shop';shopFilter=h==='liked'?{type:'feat',val:null}:{type:'strain',val:h};q='';const hi=$('#hq');if(hi)hi.value=''}
   render();window.scrollTo(0,0);
@@ -161,6 +164,7 @@ function vHome(V){
    ${dealsStrip()}${dropFeature()}${freeCounter()}
 </section>
   <nav class="catgrid" aria-label="Shop by category">
+   ${shopItems().some(isNew)?`<a class="catbtn" href="#new">${NICON}<span>New Arrivals</span><small>${shopItems().filter(isNew).length} just added</small></a>`:''}
    ${HOME_CATS.filter(id=>shopItems().some(p=>p.cat===id)).map(id=>{const c=CATS.find(x=>x.id===id);return`<a class="catbtn" href="#${id}">${ICONS[id]}<span>${c.name}</span><small>${c.blurb}</small></a>`}).join('')}
    ${shopItems().some(isPreroll)?`<a class="catbtn" href="#prerolls">${PICON}<span>Pre-Rolls</span><small>${PREROLL.blurb}</small></a>`:''}
    ${STRAINS.filter(x=>shopItems().some(p=>strainOf(p)===x.id)).map(x=>`<a class="catbtn" href="#${x.id}">${SICONS[x.id]}<span>${x.name}</span><small>${x.sub}</small></a>`).join('')}
@@ -404,7 +408,7 @@ function openZipModal(){
 }
 
 /* ---------- shop ---------- */
-function filterLabel(){return shopFilter.type==='pre'?'Pre-Rolls':shopFilter.type==='cat'?catName(shopFilter.val):shopFilter.type==='feat'?'Most liked':shopFilter.type==='strain'?strainName(shopFilter.val):shopFilter.val||''}
+function filterLabel(){return shopFilter.type==='new'?'New Arrivals':shopFilter.type==='pre'?'Pre-Rolls':shopFilter.type==='cat'?catName(shopFilter.val):shopFilter.type==='feat'?'Most liked':shopFilter.type==='strain'?strainName(shopFilter.val):shopFilter.val||''}
 function openFilters(){
   const on=(t,v)=>shopFilter.type===t&&(v==null||shopFilter.val===v)?'on':'';
   $('#layer').innerHTML=`<div class="scrim" data-close></div><aside class="drawer fsheet" role="dialog" aria-label="Filter and sort"><header><h2 style="font-size:30px">Filter &amp; Sort</h2><button class="x" data-close aria-label="Close">×</button></header>
@@ -412,7 +416,7 @@ function openFilters(){
     <label>Search<input id="shopq2" type="search" placeholder="Search menu" value="${esc(q)}"></label>
     <label>Sort by<select id="sort2"><option value="newest">Newest</option><option value="low">Price, low to high</option><option value="high">Price, high to low</option><option value="name">Name A–Z</option></select></label>
     <div class="eyebrow" style="margin-top:6px">Category</div>
-    <div class="fchips"><button class="${on('all')}" data-f="all">All</button><button class="${on('feat')}" data-f="feat">Most liked</button>${CATS.map(c=>`<button class="${on('cat',c.id)}" data-f="cat" data-v="${c.id}">${c.name}</button>`).join('')}<button class="${on('pre')}" data-f="pre" data-v="prerolls">Pre-Rolls</button></div>
+    <div class="fchips"><button class="${on('all')}" data-f="all">All</button><button class="${on('feat')}" data-f="feat">Most liked</button>${shopItems().some(isNew)?`<button class="${on('new')}" data-f="new" data-v="new">New Arrivals</button>`:''}${CATS.map(c=>`<button class="${on('cat',c.id)}" data-f="cat" data-v="${c.id}">${c.name}</button>`).join('')}<button class="${on('pre')}" data-f="pre" data-v="prerolls">Pre-Rolls</button></div>
     <div class="eyebrow" style="margin-top:6px">Strain</div>
     <div class="fchips">${STRAINS.map(x=>`<button class="${on('strain',x.id)}" data-f="strain" data-v="${x.id}">${x.name}</button>`).join('')}</div>
     <div class="eyebrow" style="margin-top:6px">Filter</div>
@@ -420,7 +424,7 @@ function openFilters(){
    </div><button class="btn" data-close style="margin-top:12px">Show results</button></aside>`;
   $('#sort2').value=sortBy;
 }
-function tagsFor(){const s=new Set();shopItems().forEach(p=>(p.tags||[]).forEach(t=>s.add(t)));return[...s].sort()}
+function tagsFor(){const s=new Set();shopItems().forEach(p=>(p.tags||[]).forEach(t=>{if(!/^new$/i.test(t))s.add(t)}));return[...s].sort()}
 function vShop(V){
   let list=shopItems();
   if(shopFilter.type==='cat')list=list.filter(p=>p.cat===shopFilter.val);
@@ -428,6 +432,7 @@ function vShop(V){
   if(shopFilter.type==='feat')list=list.filter(p=>p.featured);
   if(shopFilter.type==='strain')list=list.filter(p=>strainOf(p)===shopFilter.val);
   if(shopFilter.type==='pre')list=list.filter(isPreroll);
+  if(shopFilter.type==='new')list=list.filter(isNew);
   if(q)list=list.filter(p=>(p.name+' '+p.tags.join(' ')).toLowerCase().includes(q.toLowerCase()));
   if(sortBy==='low')list.sort((a,b)=>a.price-b.price);
   if(sortBy==='high')list.sort((a,b)=>b.price-a.price);
@@ -438,6 +443,7 @@ function vShop(V){
    <aside class="side"><h3>Browse by</h3><ul>
     <li><button class="${on('all')}" data-f="all">All Products</button></li>
     <li><button class="${on('feat')}" data-f="feat">Most liked</button></li>
+    ${shopItems().some(isNew)?`<li><button class="${on('new')}" data-f="new" data-v="new">New Arrivals</button></li>`:''}
     ${CATS.map(c=>`<li><button class="${on('cat',c.id)}" data-f="cat" data-v="${c.id}">${c.name}</button></li>`).join('')}
     ${shopItems().some(isPreroll)?`<li><button class="${on('pre')}" data-f="pre" data-v="prerolls">Pre-Rolls</button></li>`:''}
     <li class="grp">Strain</li>
@@ -450,7 +456,7 @@ function vShop(V){
      <button class="filterbtn" id="filterbtn" type="button">Filter &amp; Sort</button>
      <div class="row deskonly">
      <label class="row" style="color:var(--muted)">Sort by:<select id="sort"><option value="newest">Newest</option><option value="low">Price, low to high</option><option value="high">Price, high to low</option><option value="name">Name A–Z</option></select></label></div></div>
-    <div class="grid">${list.map(p=>`<div class="card"><button class="img" data-p="${p.id}" aria-label="${esc(p.name)} details">${p.featured?'<span class="tag">Hot</span>':''}${art(p)}</button><button class="nm" data-p="${p.id}">${esc(p.name)}</button><div class="pr ${p.stock<=0?'oos':''}">${p.stock<=0?'Out of stock':fromPrice(p)}${p.size?` <span>· ${esc(p.size)}</span>`:''}</div>
+    <div class="grid">${list.map(p=>`<div class="card"><button class="img" data-p="${p.id}" aria-label="${esc(p.name)} details">${isNew(p)?'<span class="tag new">New</span>':p.featured?'<span class="tag">Hot</span>':''}${art(p)}</button><button class="nm" data-p="${p.id}">${esc(p.name)}</button><div class="pr ${p.stock<=0?'oos':''}">${p.stock<=0?'Out of stock':fromPrice(p)}${p.size?` <span>· ${esc(p.size)}</span>`:''}</div>
      ${p.stock>0&&choices(p)?`<div class="cardbuy"><button type="button" class="btn addbtn" data-p="${p.id}">Choose ${esc((p.options.name||'option').toLowerCase())}</button></div>`:p.stock>0?`<div class="cardbuy"><div class="cq"><button type="button" data-cq2="-1" aria-label="Less">−</button><span class="num">1</span><button type="button" data-cq2="1" data-max="${p.stock}" aria-label="More">+</button></div><button type="button" class="btn addbtn" data-quick="${p.id}">Add to cart</button></div>`:''}</div>`).join('')||'<p class="note">No products match. Try another category.</p>'}</div>
    </section></div>`;
   $('#sort').value=sortBy;
@@ -815,9 +821,9 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#layer').innerHTM
 /* ---------- header search + category bar ---------- */
 function drawCatbar(){
   const el=$('#catbar .wrap');if(!el)return;
-  const cur=route!=='shop'?'':shopFilter.type==='cat'||shopFilter.type==='strain'||shopFilter.type==='pre'?shopFilter.val:shopFilter.type==='feat'?'liked':shopFilter.type==='all'&&!q?'all':'';
+  const cur=route!=='shop'?'':shopFilter.type==='cat'||shopFilter.type==='strain'||shopFilter.type==='pre'||shopFilter.type==='new'?shopFilter.val:shopFilter.type==='feat'?'liked':shopFilter.type==='all'&&!q?'all':'';
   const have=new Set(shopItems().map(p=>p.cat));
-  el.innerHTML=`<a href="#shop" data-catall="1" class="${cur==='all'?'on':''}">Shop all</a>`+`<a href="#liked" class="${cur==='liked'?'on':''}">Most liked</a>`+CATS.filter(c=>have.has(c.id)).map(c=>`<a href="#${c.id}" class="${cur===c.id?'on':''}">${c.name}</a>`+(c.id==='flower'&&shopItems().some(isPreroll)?`<a href="#prerolls" class="${cur==='prerolls'?'on':''}">Pre-Rolls</a>`:'')).join('')+`<span class="cb-div"></span>`+STRAINS.map(x=>`<a href="#${x.id}" class="cb-st ${cur===x.id?'on':''}">${x.name}</a>`).join('')+`<a href="#specials" class="cb-sp">Happy Hour</a>`;
+  el.innerHTML=`<a href="#shop" data-catall="1" class="${cur==='all'?'on':''}">Shop all</a>`+(shopItems().some(isNew)?`<a href="#new" class="${cur==='new'?'on':''}">New</a>`:'')+`<a href="#liked" class="${cur==='liked'?'on':''}">Most liked</a>`+CATS.filter(c=>have.has(c.id)).map(c=>`<a href="#${c.id}" class="${cur===c.id?'on':''}">${c.name}</a>`+(c.id==='flower'&&shopItems().some(isPreroll)?`<a href="#prerolls" class="${cur==='prerolls'?'on':''}">Pre-Rolls</a>`:'')).join('')+`<span class="cb-div"></span>`+STRAINS.map(x=>`<a href="#${x.id}" class="cb-st ${cur===x.id?'on':''}">${x.name}</a>`).join('')+`<a href="#specials" class="cb-sp">Happy Hour</a>`;
 }
 function hsMatches(v){v=v.trim().toLowerCase();if(!v)return[];return shopItems().filter(p=>(p.name+' '+(p.tags||[]).join(' ')+' '+catName(p.cat)+' '+((choices(p)||[]).map(c=>c.label).join(' '))).toLowerCase().includes(v))}
 function drawSuggest(v){

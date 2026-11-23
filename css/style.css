@@ -986,3 +986,5 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .oe-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .oe-tot .big{font-size:18px;color:var(--yellow)}
 @media (max-width:900px){.oe-cols{grid-template-columns:1fr}.oe-it{grid-template-columns:1fr auto auto;}.oe-it select{grid-column:1/-1;grid-row:2}.oe-add{flex-wrap:wrap}}
+
+.tag.new{background:var(--yellow);color:#000}
