@@ -1,4 +1,4 @@
-let oPend=null;
+let oPend=null,oEdit=null;
 /* Cargo+420 owner dashboard (installable PWA) */
 const A={orders:[],customers:[],drivers:[],members:[],products:[],zones:[],settings:{},tiers:[],events:[],zips:[]};
 const SL={new:'New',confirmed:'Confirmed',out:'Out for delivery',delivered:'Delivered',cancelled:'Cancelled'};
@@ -195,6 +195,40 @@ function itemRow(i){
   const P=A.products.find(x=>x.id===i.id),nm=P?P.name:String(i.name||'').split(' — ')[0],opt=i.opt||(P?'':(String(i.name||'').split(' — ')[1]||''));
   return`<div class="oi"><div class="oi-th">${P?art(P):art({id:String(i.id||i.name),name:i.name,cat:'flower'})}</div><div class="oi-t"><b><span class="num">${i.qty}×</span> ${esc(nm)}</b>${opt?`<small>${esc(opt)}</small>`:''}</div><span class="oi-p num">${money(Number(i.price)*i.qty)}</span></div>`;
 }
+const PAYS=['Cash','Cash App ($420Cargo)','Card tap (Square)'];
+const optsOf=P=>P&&P.options&&Array.isArray(P.options.choices)&&P.options.choices.length?P.options.choices:null;
+function oEditStart(o){
+  const m=/PAY: ([^·]+)/.exec(o.notes||'');
+  oEdit={id:o.id,items:o.items.map(i=>({id:i.id,opt:i.opt||null,qty:i.qty,name:i.name,price:Number(i.price)})),name:o.cust_name,phone:o.cust_phone,address:o.address,city:o.city,
+    pay:m?m[1].trim():'Cash',note:(o.notes||'').replace(/PAY: [^·]+(· )?/,'').trim(),fee:Number(o.fee)||0,off:Math.max(0,Number(o.subtotal)+Number(o.fee)-Number(o.total)),addId:'',addOpt:''};
+}
+function oLinePrice(l){if(l.keep)return l.price;const P=A.products.find(x=>x.id===l.id);const c=optsOf(P);const ch=c&&c.find(x=>x.label===l.opt);return Number(ch?ch.price:P?P.price:l.price)}
+function oEditPanel(o){
+  const E=oEdit,orig=o.items;
+  E.items.forEach(l=>{l.keep=orig.some(i=>i.id===l.id&&(i.opt||'')===(l.opt||''));if(l.keep)l.price=Number(orig.find(i=>i.id===l.id&&(i.opt||'')===(l.opt||'')).price)});
+  const sub=E.items.reduce((a,l)=>a+oLinePrice(l)*l.qty,0),off=Math.min(E.off,sub),tot=Math.max(0,sub-off+Number(E.fee||0));
+  const prods=A.products.filter(p=>p.active&&p.cat!=='drop').sort((a,b)=>a.name.localeCompare(b.name));
+  const addP=prods.find(p=>p.id===E.addId),addC=optsOf(addP);
+  return`<div class="oedit"><div class="oe-h"><b>Edit ${esc(o.code)}</b><span class="meta">Stock is adjusted when you save.</span></div>
+   <div class="oe-cols"><div>
+    <div class="eyebrow">Items</div>
+    <div class="oe-items">${E.items.map((l,k)=>{const P=A.products.find(x=>x.id===l.id),c=optsOf(P);return`<div class="oe-it"><span class="oe-nm">${esc(P?P.name:String(l.name).split(' — ')[0])}</span>
+      ${c?`<select data-oeopt="${k}" aria-label="Size">${c.map(ch=>`<option ${ch.label===l.opt?'selected':''}>${esc(ch.label)}</option>`).join('')}</select>`:'<span></span>'}
+      <span class="oe-q"><button class="btn ghost sm" data-oeq="${k}" data-d="-1" aria-label="Less">−</button><b class="num">${l.qty}</b><button class="btn ghost sm" data-oeq="${k}" data-d="1" aria-label="More">+</button></span>
+      <span class="num oe-p">${money(oLinePrice(l)*l.qty)}</span><button class="btn ghost sm" data-oerm="${k}" aria-label="Remove">✕</button></div>`}).join('')||'<p class="note">No items. Add one below.</p>'}</div>
+    <div class="oe-add"><select data-oeadd="p" aria-label="Add a product"><option value="">Add a product…</option>${prods.map(p=>`<option value="${p.id}" ${p.id===E.addId?'selected':''}>${esc(p.name)}${optsOf(p)?'':' · '+money(p.price)}</option>`).join('')}</select>
+     ${addC?`<select data-oeadd="o" aria-label="Size">${addC.map(ch=>`<option ${ch.label===E.addOpt?'selected':''}>${esc(ch.label)}</option>`).join('')}</select>`:''}
+     <button class="btn sm" data-oeaddgo="1" ${E.addId?'':'disabled'}>Add</button></div>
+   </div><div>
+    <div class="eyebrow">Customer &amp; delivery</div>
+    <div class="oe-f"><label>Name<input data-oef="name" value="${esc(E.name)}"></label><label>Phone<input data-oef="phone" value="${esc(E.phone)}" inputmode="tel"></label>
+     <label class="wide">Address<input data-oef="address" value="${esc(E.address)}"></label><label>City<input data-oef="city" value="${esc(E.city)}"></label>
+     <label>Pays with<select data-oef="pay">${[...new Set([...PAYS,E.pay])].map(x=>`<option ${x===E.pay?'selected':''}>${esc(x)}</option>`).join('')}</select></label>
+     <label class="wide">Note<input data-oef="note" value="${esc(E.note)}"></label><label>Delivery fee<input data-oef="fee" type="number" min="0" step="1" value="${Number(E.fee)}"></label></div>
+   </div></div>
+   <div class="oe-foot"><div class="oe-tot">Subtotal <b class="num">${money(sub)}</b>${off?` · discounts −<b class="num">${money(off)}</b>`:''} · fee <b class="num">${money(Number(E.fee||0))}</b> · <span>New total</span> <b class="num big">${money(tot)}</b>${Math.abs(tot-Number(o.total))>.004?` <span class="meta">(was ${money(o.total)})</span>`:''}</div>
+    <div class="row"><button class="btn ghost sm" data-oedit="${o.id}">Discard</button><button class="btn green sm" data-oesave="${o.id}">Save changes</button></div></div></div>`;
+}
 function aOrders(B){
   const act=o=>['new','confirmed','out'].includes(o.status);
   const match=(o,s)=>s==='active'?act(o):s==='today'?isToday(o.created_at):o.status===s;
@@ -215,7 +249,8 @@ function aOrders(B){
     ${o.status==='new'?`<button class="btn sm" data-st="${o.id}" data-to="confirmed">Confirm order</button>`:''}
     ${o.status==='confirmed'?`<button class="btn sm" data-st="${o.id}" data-to="out" ${o.driver_id?'':'disabled title="Assign a driver first"'}>Send out</button>`:''}
     ${o.status==='out'?`<span class="eta-row"><span>${o.eta_at?'ETA '+etaTxt(o):'ETA'}:</span>${[10,20,30,45].map(m=>`<button class="btn ghost sm" data-oeta="${m}" data-o="${o.id}">${m}m</button>`).join('')}</span><button class="btn green sm" data-st="${o.id}" data-to="delivered" data-confirm="1">${oPend===o.id?(isCash(o)?'Cash received? Tap to confirm':'Tap again to confirm'):(isCash(o)?'Delivered · cash received':'Mark delivered')}</button>`:''}
-    <button class="btn red sm" data-cancel="${o.id}">Cancel</button>`}</div>
+    <button class="btn ghost sm" data-oedit="${o.id}">${oEdit&&oEdit.id===o.id?'Close edit':'Edit order'}</button>
+    <button class="btn red sm" data-cancel="${o.id}">Cancel</button>`}</div>${oEdit&&oEdit.id===o.id?oEditPanel(o):''}
   </article>`}).join('')||'<p class="note">No orders here right now. New orders appear at the top with a chime and a phone alert.</p>'}</div></div>`;
 }
 /* ---------- customers ---------- */
@@ -588,6 +623,17 @@ document.addEventListener('click',async e=>{
   if(t.id==='testpush'){testPush();return}
   if(t.id==='openbtn'){const d=await sb.from('store_settings').update({open:!A.settings.open}).eq('id',1).select().single();if(d.error)return toast('Not saved',errMsg(d.error));A.settings=d.data;toast(A.settings.open?'Store is taking orders':'Store closed','',true);render();return}
   if(t.dataset.oeta){t.disabled=true;const {data,error}=await sb.rpc('set_order_eta',{p_order:t.dataset.o,p_minutes:+t.dataset.oeta});if(error)toast('ETA not saved',errMsg(error));else{const o=A.orders.find(x=>x.id===t.dataset.o);if(o)o.eta_at=data.eta_at;toast(`ETA set · ${t.dataset.oeta} min`,'The customer sees it on their tracking page.',true)}render();return}
+  if(t.dataset.oedit){const o=A.orders.find(x=>x.id===t.dataset.oedit);if(oEdit&&oEdit.id===o.id)oEdit=null;else oEditStart(o);render();return}
+  if(t.dataset.oeq!==undefined&&oEdit){const l=oEdit.items[+t.dataset.oeq];l.qty=Math.max(1,l.qty+(+t.dataset.d));render();return}
+  if(t.dataset.oerm!==undefined&&oEdit){oEdit.items.splice(+t.dataset.oerm,1);render();return}
+  if(t.dataset.oeaddgo&&oEdit&&oEdit.addId){const P=A.products.find(x=>x.id===oEdit.addId),c=optsOf(P),opt=c?(oEdit.addOpt||c[0].label):null;
+    const ex=oEdit.items.find(l=>l.id===P.id&&(l.opt||'')===(opt||''));if(ex)ex.qty++;else oEdit.items.push({id:P.id,opt,qty:1,name:P.name+(opt?' — '+opt:''),price:Number(c?(c.find(x=>x.label===opt)||{}).price:P.price)});
+    oEdit.addId='';oEdit.addOpt='';render();return}
+  if(t.dataset.oesave&&oEdit){const E=oEdit;if(!E.items.length)return toast('Add at least one item','Or cancel the order instead.');t.disabled=true;t.textContent='Saving…';
+    const {data,error}=await sb.rpc('admin_edit_order',{p_id:E.id,p_items:E.items.map(l=>({id:l.id,opt:l.opt,qty:l.qty})),p_name:E.name,p_phone:E.phone,p_address:E.address,p_city:E.city,p_notes:['PAY: '+E.pay,E.note].filter(Boolean).join(' · '),p_fee:Number(E.fee)||0});
+    if(error){t.disabled=false;t.textContent='Save changes';return toast('Not saved',errMsg(error))}
+    const i=A.orders.findIndex(x=>x.id===data.id);if(i>=0)A.orders[i]=data;oEdit=null;toast(`${data.code} updated`,`New total ${money(data.total)}`,true);
+    sb.from('products').select('*').order('name').then(r=>{if(r.data)A.products=r.data;render()});render();return}
   if(t.dataset.st){if(t.dataset.confirm&&oPend!==t.dataset.st){const id=t.dataset.st;oPend=id;render();setTimeout(()=>{if(oPend===id){oPend=null;render()}},4000);return}
     oPend=null;t.disabled=true;const o=await upd('orders',t.dataset.st,{status:t.dataset.to});if(o){toast(`${o.code} → ${SL[o.status]}`,'',true);if(o.status==='delivered'){const c=A.customers.find(c=>c.id===o.customer_id);if(c)c.id_verified=true}}render();return}
   if(t.dataset.cancel){if(pendingCancel!==t.dataset.cancel){pendingCancel=t.dataset.cancel;t.textContent='Tap again to cancel';setTimeout(()=>{if(pendingCancel===t.dataset.cancel){pendingCancel=null;t.textContent='Cancel'}},4000);return}
@@ -763,3 +809,11 @@ document.addEventListener('submit',async e=>{
   const em=$('#tm-email').value.trim(),role=$('#tm-role').value,nm=$('#tm-name').value.trim();if(!em)return;
   if(await teamSet(em,role,nm)){toast('Person added',`${em} · ${ROLE_LABEL[role]}`,true);if(role==='driver')await reloadData();loadTeam()}
 },true);
+
+document.addEventListener('change',e=>{const t=e.target;if(!oEdit)return;
+  if(t.dataset.oeopt!==undefined){oEdit.items[+t.dataset.oeopt].opt=t.value;render();return}
+  if(t.dataset.oeadd==='p'){oEdit.addId=t.value;oEdit.addOpt='';render();return}
+  if(t.dataset.oeadd==='o'){oEdit.addOpt=t.value;return}
+  if(t.dataset.oef==='pay'){oEdit.pay=t.value;return}
+  if(t.dataset.oef==='fee'){oEdit.fee=Math.max(0,Number(t.value)||0);render();return}});
+document.addEventListener('input',e=>{const t=e.target;if(!oEdit||!t.dataset.oef||t.dataset.oef==='pay')return;if(t.dataset.oef==='fee'){oEdit.fee=Math.max(0,Number(t.value)||0);return}oEdit[t.dataset.oef]=t.value});
